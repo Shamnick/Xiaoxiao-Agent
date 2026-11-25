@@ -14,6 +14,20 @@
   let session;
   let draft;
   let target;
+  let instructions;
+  function storeInstructions() {
+    if (!session) return;
+    instructions.selected = target;
+    try { ProofInstructions.save(localStorage, scope, el('proofBrief').value, instructions); }
+    catch { status('本机草稿保存失败，请在离开前复制修改要求。'); }
+  }
+  function rememberInput() {
+    const field = target || 'unassigned';
+    const value = el('proofPrompt').value;
+    if (value.trim()) instructions.fields[field] = ConnectionIntent.mask(value);
+    else delete instructions.fields[field];
+    storeInstructions();
+  }
   let awaitingTarget = false;
   let dictationTurn = 0;
   const delivery = el('proofDelivery');
@@ -63,17 +77,19 @@
     const brief = session.brief;
     ++dictationTurn;
     draft = null;
-    target = null;
+    instructions = ProofInstructions.read(localStorage, scope, id);
+    target = instructions.selected;
     awaitingTarget = false;
     el('proofEdition').textContent = brief.edition;
     el('proofPoster').dataset.brief = id;
     const art = dialog.querySelector('.proof-art');
     art.src = brief.art;
     art.alt = brief.alt;
-    el('proofPrompt').value = '';
-    status();
+    el('proofPrompt').value = instructions.fields[target || 'unassigned'] || '';
+    status(el('proofPrompt').value ? '已恢复这份简报的修改要求。' : '');
     show();
-    nodes.title.focus();
+    (nodes[target] || nodes.title).focus();
+    return true;
   }
 
   async function preview() {
@@ -104,8 +120,16 @@
         if (turn !== generation) return;
       } catch (error) {
         if (turn === generation) {
-          status(errorMessage(error));
-          if (document.activeElement === el('proofStopPreview')) focusAction('proofPrompt');
+          const note = errorMessage(error);
+          if (note.includes('作品版本已更新')) {
+            if (await chooseBrief()) {
+              status('已载入最新文案，修改要求已保留。可再次预览。');
+              focusAction('proofPrompt');
+            }
+          } else {
+            status(note);
+            if (document.activeElement === el('proofStopPreview')) focusAction('proofPrompt');
+          }
         }
         return;
       } finally { if (previewTurn === turn) setPreviewTurn(undefined); }
@@ -138,13 +162,17 @@
     try {
       session = await api.change({ ...scope, brief: el('proofBrief').value, ...input });
       draft = null;
-      el('proofPrompt').value = '';
       status(message);
+      if (input.operation === 'edit') {
+        el('proofPrompt').value = '';
+        rememberInput();
+      }
       show();
     } catch (error) {
       const note = errorMessage(error);
-      if (note.includes('作品版本已更新')) await chooseBrief();
-      status(note);
+      if (note.includes('作品版本已更新')) {
+        if (await chooseBrief()) status('已载入最新文案，修改要求已保留。可再次预览。');
+      } else status(note);
     } finally {
       saving = false;
       el('proofExport').disabled = !session || Boolean(draft);
@@ -185,7 +213,10 @@
     status('已停止本次预览，修改要求已保留。');
     focusAction('proofPrompt');
   };
-  el('proofPrompt').oninput = invalidatePreview;
+  el('proofPrompt').oninput = () => {
+    invalidatePreview();
+    if (session && !saving) rememberInput();
+  };
   el('proofModel').onchange = invalidatePreview;
 
   for (const [key, node] of Object.entries(nodes)) {
@@ -194,9 +225,15 @@
       const pending = awaitingTarget;
       awaitingTarget = false;
       ++dictationTurn;
+      if (!target && instructions.fields.unassigned) {
+        instructions.fields[key] = instructions.fields.unassigned;
+        delete instructions.fields.unassigned;
+      }
       target = key;
+      el('proofPrompt').value = instructions.fields[key] || '';
       draft = null;
       status();
+      storeInstructions();
       show();
       if (pending) preview();
       else focusAction('proofPrompt');

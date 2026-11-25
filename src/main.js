@@ -377,7 +377,7 @@ handle('proof:change', (_, input) => {
 });
 handle('proof:preview', async (sender, input) => {
   const version = proof.snapshot(proofBook(input), input.brief);
-  if (version.id !== input.base) throw Error('作品已更新，请重新打开简报');
+  if (version.id !== input.base) throw Error('作品版本已更新，请重新预览修改');
   if (!['title', 'voice', 'body'].includes(input.target) || typeof input.instruction !== 'string' ||
       !input.instruction.trim() || input.instruction.length > 240) throw Error('请选择文案并输入修改要求');
   if (mask(input.instruction) !== input.instruction || mask(version.current[input.target]) !== version.current[input.target]) throw Error('请先从文案和要求中移除密钥');
@@ -391,6 +391,8 @@ handle('proof:preview', async (sender, input) => {
       system: 'Rewrite only the selected copy according to the instruction. Return only the proposed replacement, in the same language unless requested. Limit 1000 characters.',
       tools: [], maxSteps: 1, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60000)])
     });
+    controller.signal.throwIfAborted();
+    if (proof.snapshot(proofBook(input), input.brief).id !== input.base) throw Error('作品版本已更新，请重新预览修改');
     const text = replacement.trim();
     if (!text || text.length > 1000 || mask(text) !== text) throw Error('模型提案无效，请缩短要求后重试');
     return text;

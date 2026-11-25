@@ -13,6 +13,7 @@ const { _electron: electron } = require('playwright');
   const data = await fs.mkdtemp(path.join(os.tmpdir(), 'xiaoxiao-proof-'));
   const executablePath = process.env.XIAOXIAO_SMOKE_EXECUTABLE;
   const calls = [];
+  const lateResponse = Promise.withResolvers();
   const slowRequest = Promise.withResolvers();
   const slowAborted = Promise.withResolvers();
   const retryRequest = Promise.withResolvers();
@@ -22,6 +23,12 @@ const { _electron: electron } = require('playwright');
     for await (const chunk of req) raw += chunk;
     const body = JSON.parse(raw);
     calls.push({url:req.url,body});
+    if (calls.length === 4) {
+      lateResponse.resolve(() => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
+        choices: [{ message: {role: 'assistant', content: '基于旧版本的提案'}, finish_reason: 'stop' }]
+      })));
+      return;
+    }
     if (calls.length === 2 || calls.length === 3) {
       const [received, closed] = calls.length === 2 ? [slowRequest, slowAborted] : [retryRequest, retryAborted];
       received.resolve();
@@ -122,6 +129,12 @@ const { _electron: electron } = require('playwright');
     assert.equal(await text('proofTitleObject'), original);
     const reverted = await exportPoster('poster-reverted');
     assert.deepEqual(reverted.bytes,initial.bytes);
+    const bodyDraft = '改成：保留在新品发布里的正文';
+    await node('proofBodyObject').click();
+    await node('proofPrompt').fill(bodyDraft);
+    await node('proofTitleObject').click();
+    assert.equal(await node('proofPrompt').inputValue(), '', 'Switching targets must not reuse the body instruction');
+    await node('proofPrompt').fill('改成：另一个标题草稿');
     await node('proofBrief').selectOption('invite');
     const otherTitle = await text('proofTitleObject');
     assert.notEqual(otherTitle, original);
@@ -137,6 +150,9 @@ const { _electron: electron } = require('playwright');
     assert.equal(await text('proofTitleObject'), otherTitle);
     await node('proofBrief').selectOption('launch');
     assert.equal(await text('proofVoiceObject'), original);
+    assert.equal(await node('proofPrompt').inputValue(), '改成：另一个标题草稿');
+    await node('proofBodyObject').click();
+    assert.equal(await node('proofPrompt').inputValue(), bodyDraft);
     await page.keyboard.press('Escape');
     await focus('openProofFromKnot');
     assert.equal(await node('prompt').inputValue(), '保留我的对话草稿');
@@ -154,6 +170,8 @@ const { _electron: electron } = require('playwright');
     page.on('pageerror', e => errors.push(e.message));
     await node('presenceKnot').click();
     await node('openProofFromKnot').click();
+    await focus('proofBodyObject');
+    assert.equal(await node('proofPrompt').inputValue(), bodyDraft);
     await node('proofBrief').selectOption('invite');
     await page.waitForFunction(() => document.querySelector('#proofVersion').textContent.endsWith('v1'));
     assert.equal(await text('proofVoiceObject'), '周五来工作室看看。');
@@ -195,7 +213,32 @@ const { _electron: electron } = require('playwright');
     await deadline(retryAborted.promise);
     assert(await node('proofCompare').isHidden());
     assert.equal(await text('proofTarget'),'修改海报正文');
+    assert.equal(await node('proofPrompt').inputValue(), '');
     await node('proofVoiceObject').click();
+    assert.equal(await node('proofPrompt').inputValue(), '改得更亲切');
+    await node('proofPreview').click();
+    const finishLate = await deadline(lateResponse.promise);
+    await page.evaluate(async () => {
+      const proof = nova.proof;
+      const base = (await proof.read({ brief: 'invite' })).id;
+      await proof.change({ brief: 'invite', base, target: 'voice', operation: 'edit', text: '同事刚更新的旁白。' });
+    });
+    finishLate();
+    await page.waitForFunction(() => document.querySelector('#proofVoiceObject').textContent === '同事刚更新的旁白。');
+    assert(await node('proofCompare').isHidden());
+    assert.equal(await node('proofPrompt').inputValue(), '改得更亲切');
+    await focus('proofPrompt');
+    await node('proofPreview').click();
+    await focus('proofAccept');
+    assert.equal(await text('proofBefore'), '同事刚更新的旁白。');
+    assert.equal(JSON.parse(calls[4].body.messages[1].content).selected, '同事刚更新的旁白。');
+    await node('proofDiscard').click();
+    await node('proofModel').selectOption('');
+    await node('proofPrompt').fill('改成：周五来工作室看看。');
+    await node('proofPreview').click();
+    await node('proofAccept').click();
+    await focus('proofVoiceObject');
+    assert.equal(await node('proofPrompt').inputValue(), '');
     await node('proofAudio').click();
     await focus('generationAudioPrompt');
     assert.equal(await node('generationAudioPrompt').inputValue(), '周五来工作室看看。');
@@ -226,8 +269,8 @@ const { _electron: electron } = require('playwright');
     assert.equal(check[1],'只在分支更新');
     assert.deepEqual(errors, []);
     assert.deepEqual(network, []);
-    assert.equal(calls.length,3);
-    console.log('PASS: PNG preview, export, cancel, unchanged artwork pixels, byte-identical rollback, scoped edits, branch, restart, model cancellation and narration.');
+    assert.equal(calls.length,5);
+    console.log('PASS: PNG preview, export, cancel, unchanged artwork pixels, byte-identical rollback, scoped edits, branch, restart, per-object drafts, stale model replies, manual retry and narration.');
   } finally {
     try { await app?.close(); } finally { server.closeAllConnections(); server.close(); await fs.rm(data, { recursive: true, force: true }); }
   }

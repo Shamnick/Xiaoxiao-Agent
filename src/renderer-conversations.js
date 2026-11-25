@@ -148,6 +148,7 @@ function installSessionActions() {
     $('deleteDialog').close();
     if (current?.id === id) changeView(null, selectedProjectId);
     else { renderConversationHeader(); refreshReplyVersions(); renderHistory(); }
+    ProofInstructions.forgetConversation(localStorage, id);
     unsent.delete(id);
     systemEdits.delete(id);
     openInspectors.delete(id);
