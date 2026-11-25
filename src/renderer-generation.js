@@ -345,6 +345,12 @@ function renderGenerationResult() {
     const prompt = document.createElement('p');
     prompt.className = 'creation-question';
     prompt.textContent = item.prompt;
+    if (item.kind === 'audio' && item.excerptLabel) {
+      const label = document.createElement('small');
+      label.className = 'creation-excerpt-label';
+      label.textContent = item.excerptLabel;
+      prompt.prepend(label);
+    }
     const preview = document.createElement('div');
     preview.className = 'creation-preview';
     const buttons = document.createElement('div');
@@ -448,7 +454,9 @@ function updateGenerationComposer() {
   }
   $('runGeneration').disabled = !historyLoaded || !hasModel || !prompt.value.trim();
   if (local && prompt.value.length > 3000) $('runGeneration').disabled = true;
+  updateSpeechExcerpt();
   $('runGeneration').lastChild.textContent = generationRequestId ? ' 加入队列' : ' 开始生成';
+  if (generationKind === 'audio') $('runGeneration').lastChild.textContent = generationRequestId ? ' 全文加入队列' : ' 生成全文';
   $('cancelGeneration').hidden = !runningCreation || creationThread(runningCreation.item) !== activeThread();
   const editing = creationDrafts.get(activeThread())?.editing;
   $('cancelCreationEdit').hidden = !editing;
@@ -457,8 +465,45 @@ function updateGenerationComposer() {
   prompt.placeholder = follow ? '继续描述要调整的地方…' : generationPlaceholders[generationKind];
   $('generationPromptLabel').textContent = editing ? '编辑这轮提示词' : follow ? '继续创作 · 沿用本会话的文字描述' : generationPromptLabels[generationKind];
   $('runGeneration').title = hasModel ? '开始生成 · ⌘ / Ctrl + Enter' : '请先在设置中添加模型配置';
-  if (prompt) $('generationPromptCount').textContent = `${prompt.value.length} / ${local ? '3,000' : '8,000'}`;
+  if (prompt) $('generationPromptCount').textContent = local && prompt.value.length > 3000
+    ? `${prompt.value.length} 字符 · 请选择 3,000 字符以内的片段`
+    : `${prompt.value.length} / ${local ? '3,000' : '8,000'}`;
 }
+
+// Textarea offsets use UTF-16 and its value normalizes line endings to LF.
+function speechExcerpt(field) {
+  const { value, selectionStart: start, selectionEnd: end } = field;
+  if (start !== end) return { label: '选区', text: value.slice(start, end).trim() };
+  const before = value.slice(0, start);
+  const lineStart = before.lastIndexOf('\n') + 1;
+  const newline = value.indexOf('\n', start);
+  const number = value.slice(0, lineStart).split('\n').filter(line => line.trim()).length + 1;
+  return { label: `第 ${number} 段`, text: value.slice(lineStart, newline < 0 ? value.length : newline).trim() };
+}
+
+function updateSpeechExcerpt() {
+  const button = $('generateSpeechExcerpt');
+  button.hidden = generationKind !== 'audio';
+  if (button.hidden) return;
+  const excerpt = speechExcerpt(generationPromptElement());
+  const model = generationModelId();
+  const limit = isLocalVoice('audio', model) ? 3000 : 8000;
+  button.disabled = !historyLoaded || !model || !excerpt.text || excerpt.text.length > limit;
+  $('speechExcerptLabel').textContent = excerpt.label === '选区' ? '生成选区' : '生成' + excerpt.label;
+  button.title = excerpt.text.length > limit ? `每次最多 ${limit} 个字符，请缩小选区` : '仅合成光标所在段落或选中的文字，保留全文草稿';
+}
+
+generationPromptElement().addEventListener('selectionchange', updateSpeechExcerpt);
+$('generateSpeechExcerpt').onclick = () => {
+  if (generationKind !== 'audio') return;
+  const field = generationPromptElement();
+  const {label, text} = speechExcerpt(field);
+  const parentId = creationDrafts.get(activeThread())?.editing?.id || currentTurns().at(-1)?.id;
+  if (enqueueCreation(text, captureFields(), parentId || null, label)) {
+    saveCreationDraft();
+    field.focus();
+  }
+};
 
 async function refreshGenerationModels() {
   try {
@@ -695,7 +740,7 @@ function endCreationEdit() {
 }
 $('cancelCreationEdit').onclick = endCreationEdit;
 
-function enqueueCreation(prompt, fields, parentId) {
+function enqueueCreation(prompt, fields, parentId, excerptLabel) {
   let input;
   try { input = generationInput(generationKind, fields, prompt.trim()); }
   catch (error) { $('generationStatus').textContent = errorMessage(error); return false; }
@@ -705,8 +750,13 @@ function enqueueCreation(prompt, fields, parentId) {
     return false;
   }
   if (!input.prompt) return false;
+  if (excerptLabel && input.kind === 'audio' && input.options) delete input.options.input;
+  if (isLocalVoice(input.kind, input.providerId) && input.prompt.length > 3000) {
+    $('generationStatus').textContent = '本机语音每次最多 3,000 个字符，请选中较短的段落。';
+    return false;
+  }
   const item = { id: crypto.randomUUID(), threadId: activeThread(), parentId, kind: input.kind,
-    prompt: input.prompt, fields, ...(input.kind === 'video' && { tracksSubmission: true }), state: 'queued',
+    prompt: input.prompt, fields, ...(excerptLabel && {excerptLabel}), ...(input.kind === 'video' && { tracksSubmission: true }), state: 'queued',
     createdAt: Math.max(Date.now(), (generationHistory[0]?.createdAt || 0) + 1) };
   generationHistory.unshift(item);
   const recorded = archiveOperation('readwrite', records => records.put({ ...item, state: 'queued' }))
@@ -734,7 +784,7 @@ function resumeVideo(item) {
 }
 function repeatCreation(item) {
   if (item.receipt && !window.confirm('重新生成将提交一个新视频任务，服务商可能再次收费。继续吗？')) return;
-  enqueueCreation(item.prompt, item.fields || captureFields(), item.parentId || null);
+  enqueueCreation(item.prompt, item.fields || captureFields(), item.parentId || null, item.excerptLabel);
 }
 
 $('generationComposer').onsubmit = event => {

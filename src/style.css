@@ -901,6 +901,7 @@ body:has(#generationStudio:not([hidden])) > :is(.main, #sidebar, #toggleSidebar)
 .creation-preview .generation-result-video { width: 100%; }
 .creation-preview.creation-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); align-items: start; gap: 8px; }
 .creation-preview .generation-result-audio { width: 100%; }
+.creation-excerpt-label { display: block; margin-bottom: 2px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .creation-actions { display: flex; gap: 2px; margin-top: 4px; }
 
 .reply-versions { display: inline-flex; align-items: center; margin-inline-start: 5px; padding-inline-start: 5px; border-inline-start: 1px solid var(--line); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }

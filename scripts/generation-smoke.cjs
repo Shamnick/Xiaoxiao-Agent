@@ -63,7 +63,7 @@ async function run() {
   const data = await fs.mkdtemp(path.join(os.tmpdir(), 'xiaoxiao-generation-smoke-'));
   let app, png, variants;
   const requests = [];
-  const imagePrompts = [], videoPrompts = [];
+  const imagePrompts = [], videoPrompts = [], audioPrompts = [];
   const server = createServer(async (req, res) => {
     requests.push(`${req.method} ${req.url}`);
     if (req.method === 'POST') {
@@ -88,7 +88,7 @@ async function run() {
         return res.end(JSON.stringify({ id: 'fixture-video', status: 'queued' }));
       }
       if (req.url === '/v1/audio/speech') {
-        assert.equal(body.input, '欢迎来到创作中心');
+        audioPrompts.push(body.input);
         res.writeHead(200, { 'content-type': 'audio/mpeg' });
         return res.end(Buffer.from('fixture audio'));
       }
@@ -273,7 +273,29 @@ async function run() {
     await page.locator('#runGeneration').click();
     await page.locator('audio.generation-result-audio').waitFor();
     await page.waitForFunction(() => document.getElementById('generationStatus').textContent === '生成完成，可以播放或保存文件。');
+    const speech = page.locator('#generationAudioPrompt');
+    const excerpt = page.locator('#generateSpeechExcerpt');
+    const script = '欢迎来到创作中心\n\n  第二段有一句旁白。\n结尾。';
+    await page.locator('#generationPanelAudio details summary').click();
+    await page.locator('#generationAudioOptions').fill('{"input":"高级参数里的旧全文"}');
+    await speech.fill(script);
+    await speech.evaluate(field => field.setSelectionRange(13,13));
+    await page.getByRole('button', {name:'生成第 2 段'}).click();
+    const audioTurn = page.locator('.creation-turn').nth(1);
+    await audioTurn.locator('audio').waitFor();
+    assert.equal(await audioTurn.locator('.creation-excerpt-label').innerText(), '第 2 段');
+    assert.equal(await speech.inputValue(), script);
+    await speech.evaluate(field => {
+      const start = field.value.indexOf('一句');
+      field.setSelectionRange(start, start + 4);
+    });
+    await page.getByRole('button', {name:'生成选区'}).click();
+    await page.locator('.creation-turn').nth(2).locator('audio').waitFor();
+    assert.deepEqual(audioPrompts, ['欢迎来到创作中心','第二段有一句旁白。','一句旁白']);
+    await speech.evaluate(field => field.setSelectionRange(field.value.indexOf('\n') + 1, field.value.indexOf('\n') + 1));
+    await page.waitForFunction(() => document.getElementById('generateSpeechExcerpt').disabled);
     await page.locator('#generationTabImage').click();
+    assert(await excerpt.isHidden());
     const imageField = page.locator('#generationImagePrompt');
     const history = page.locator('#generationHistory .generation-history-item');
     assert.equal(await imageField.inputValue(), '');
@@ -326,6 +348,9 @@ async function run() {
     await page.reload();
     await enterWorkspace(page);
     await page.locator('#openGenerationStudio').click();
+    await history.filter({hasText:'欢迎来到创作中心'}).click();
+    assert.equal(await speech.inputValue(), script);
+    assert.deepEqual(await page.locator('.creation-excerpt-label').allTextContents(), ['第 2 段','选区']);
     await history.filter({hasText:'一个玻璃质感的海面'}).click();
     await page.locator('.creation-turn').last().locator('img').waitFor();
     assert.equal(await page.locator('.creation-question').count(), 4);

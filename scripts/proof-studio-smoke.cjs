@@ -255,6 +255,18 @@ const { _electron: electron } = require('playwright');
       const bytes = await fs.readFile(audio);
       assert.equal(bytes.toString('ascii',8,12),'WAVE');
       assert(bytes.length > 4096);
+      const manuscript = '长稿'.repeat(1550) + '\n周五见。';
+      const scriptField = node('generationAudioPrompt');
+      await scriptField.fill(manuscript);
+      assert(await node('runGeneration').isDisabled());
+      await page.getByRole('button', {name:'生成第 2 段'}).click();
+      const clip = page.locator('.creation-turn').nth(1);
+      await page.waitForFunction(() => document.querySelectorAll('.creation-turn audio')[1]?.duration > 0);
+      assert.equal(await scriptField.inputValue(), manuscript);
+      const expected = await clip.locator('audio').getAttribute('src');
+      await clip.getByRole('button',{name:'导出这轮作品'}).click();
+      await page.getByText('作品已导出。',{exact:true}).waitFor();
+      assert.equal((await fs.readFile(audio)).toString('base64'), expected.split(',')[1]);
     }
     const check = await page.evaluate(async () => {
       const c = await nova.conversations.create({title:'测试分支'});
