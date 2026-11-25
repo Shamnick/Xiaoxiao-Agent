@@ -612,6 +612,12 @@ fieldset input:not([type="checkbox"]), fieldset select { display: block; width: 
 .steps-label { max-width: 215px; }
 .small-dialog { width: min(420px, calc(100vw - 44px)); }
 .small-dialog input { width: 100%; }
+#connectionDialog { width: min(460px, calc(100vw - 32px)); }
+#connectionDialog :is(input, button) { min-height: 44px; }
+#connectionDialog .muted { font-size: 13px; line-height: 1.5; }
+#connectionTarget { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+#connectionStatus:not(:empty) { margin-top: 12px; }
+#connectionAddress[aria-invalid="true"] { border-color: var(--danger); }
 .mcp-help { margin: 12px 0; color: var(--muted); }
 .mcp-help summary { cursor: pointer; }
 .mcp-help pre, .markdown pre { padding: 12px; overflow: auto; border-radius: 8px; background: var(--inset); }

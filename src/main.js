@@ -10,6 +10,10 @@ const { parallelAnalysisTool } = require('./task-analysis');
 const {config,runAgent,analyzeMedia,visualContent,models}=require('./providers');
 const { generateAsset } = require('./generation');
 const { createArtifactTool } = require('./artifacts');
+const { checkConnection, saveReport } = require('./connection-report');
+const { mask } = require('./connection-intent');
+const { redactChatHistory } = require('./redact-chat-history');
+const connectionChecks = new Set();
 const { replyFiles } = require('./reply-files');
 const { TEXT_FILTER, MAX_SOURCES, readTextFile, publicProject, projectSourceTool } = require('./project-sources');
 const { listSkills, parseSkill, saveSkill, validateSkillIds, skillInstructions } = require('./skills');
@@ -341,6 +345,29 @@ handle('messages:saveFile', async (sender, { id, index, block }) => {
   persist(c);
   return { name: artifacts[item].name, item };
 });
+handle('messages:checkConnection', async (_, { id, address, key }) => {
+  idle(id);
+  conversation(id);
+  connectionChecks.add(id);
+  let artifact;
+  try {
+    const result = await checkConnection(address, key);
+    artifact = await saveReport(path.join(dataRoot, 'Reports'), result);
+    const c = conversation(id);
+    if (c.title === '新对话') c.title = '接口检测 · ' + new URL(result.endpoint).hostname;
+    const summary = result.ok ? '模型列表检查通过' : '模型列表检查未通过';
+    const http = result.status === null ? '未收到 HTTP 响应' : 'HTTP ' + result.status;
+    c.messages.push(
+      { role: 'user', localCheck: true, content: '检测模型接口 ' + result.endpoint + ' 并保存 HTML 报告' },
+      { role: 'assistant', localCheck: true, content: summary + ' · ' + http + ' · ' + result.elapsed +
+          ' ms。' + result.detail, artifacts: [artifact] }
+    );
+    return persist(c);
+  } catch (error) {
+    if (artifact) await fs.promises.rm(path.dirname(artifact.path), { recursive: true, force: true });
+    throw error;
+  } finally { connectionChecks.delete(id); }
+});
 handle('messages:openArtifact', async (_, { id, index, item }) => {
   const message = conversation(id).messages[index];
   const entry = Number.isInteger(item) && message?.role === 'assistant' && message.artifacts?.[item];
@@ -402,7 +429,7 @@ handle('conversations:branch', (_, { id, through, before }) => {
   store.write('conversations', [branch, ...rows]);
   return branch;
 });
-function idle(id) { if (active.has(id)) throw Error('请先停止此会话的任务'); }
+function idle(id) { if (connectionChecks.has(id)) throw Error('接口检测进行中，请稍候'); if (active.has(id)) throw Error('请先停止此会话的任务'); }
 handle('conversations:save',(_,raw)=>{
   const run = active.get(raw.id);
   if (run && Object.keys(raw).some(key => !['id', 'title', 'pinned'].includes(key))) idle(raw.id);
@@ -752,6 +779,7 @@ handle('chat:answer', (_, { conversationId, requestId, interactionId, answer }) 
   if (!run || run.requestId !== requestId || run.interaction?.id !== interactionId || !run.response) {
     throw Error('这项请求已经结束');
   }
+  if (mask(answer) !== answer) throw Error('请从回答中移除密钥');
   run.response(answer);
 });
 handle('chat:update', (_, { conversationId, requestId, text, immediate }) => {
@@ -760,6 +788,7 @@ handle('chat:update', (_, { conversationId, requestId, text, immediate }) => {
     throw Error('当前任务暂时无法接收补充要求');
   }
   if (typeof text !== 'string' || !text.trim() || text.length > 4000) throw Error('补充要求需要 1 至 4000 个字符');
+  if (mask(text) !== text) throw Error('请在输入框的「＋ → 接口检测」中使用临时密钥');
   run.addUpdate(text.trim());
   if (immediate === true) run.interruptInference?.();
 });
@@ -799,6 +828,7 @@ async function runConversation(sender, { conversationId, text, attachmentId, att
   if (typeof requestId !== 'string' || !requestId || requestId.length > 100 || typeof text !== 'string' || !text.trim() || text.length > 64000) {
     throw Error('消息无效或超过 64000 字符');
   }
+  if (mask(text) !== text) throw Error('请在输入框的「＋ → 接口检测」中使用临时密钥');
   const c = conversation(conversationId);
   if (!Array.isArray(media) || media.length > 8) throw Error('图像附件数量无效');
   const p = provider(c.providerId);
@@ -1116,7 +1146,8 @@ app.whenReady().then(()=>{
   schedules = new ScheduleBook(store);
   try {
     const conversations = all();
-    if (conversations.some(row => row.pendingRun)) {
+    const redacted = redactChatHistory(conversations);
+    if (redacted || conversations.some(row => row.pendingRun)) {
       store.write('conversations', conversations.map(row => row.pendingRun ? failRun(row, '应用退出，任务已中断') : row));
     }
     schedules.recover();

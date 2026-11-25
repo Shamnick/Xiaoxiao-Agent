@@ -33,6 +33,7 @@ function renderConversationMetrics(conversation, run) {
     outputReports += metrics.outputReports ?? 0;
   }
   for (const message of conversation.messages) {
+    if (message.localCheck) continue;
     if (message.role === 'user' && !Number.isInteger(message.resumedFrom)) rounds++;
     if (message.role === 'assistant') include(message.metrics);
   }

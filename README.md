@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/Shamnick/Xiaoxiao-Agent/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/Shamnick/Xiaoxiao-Agent/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version 0.6.5" src="https://img.shields.io/badge/version-0.6.5-9b4248">
+  <img alt="Version 0.6.6" src="https://img.shields.io/badge/version-0.6.6-9b4248">
   <img alt="Electron" src="https://img.shields.io/badge/desktop-Electron-183449">
   <img alt="macOS Apple Silicon" src="https://img.shields.io/badge/verified-macOS%20Apple%20Silicon-6a8b7c">
 </p>
@@ -30,7 +30,7 @@ Xiaoxiao Agent 是一个独立开发的多模型桌面工作空间。打开本�
 
 ![左侧文件树、中间编辑器、右侧 Agent 的开发工作台](docs/images/development.png)
 
-> 界面截图使用演示数据。0.6.5 面向 Apple Silicon Mac 本地试用。任务工具需要模型支持工具调用，视觉实验室需要支持图像输入的模型。
+> 界面截图使用演示数据。0.6.6 面向 Apple Silicon Mac 本地试用。任务工具需要模型支持工具调用，视觉实验室需要支持图像输入的模型。
 
 <details>
 <summary>查看对话和任务界面</summary>
@@ -53,7 +53,7 @@ Xiaoxiao Agent 是一个独立开发的多模型桌面工作空间。打开本�
 | --- | --- |
 | **macOS 界面** | 可交互的丝结首页，主进程 CPU 与内存实时读数，听写和文本共用输入框。工作区支持浅色、深色和跟随系统 |
 | **连接多个模型** | Anthropic、OpenAI Compatible、Ollama；内置常见服务地址预设 |
-| **自定义 API** | 配置 Base URL、API Key、模型 ID，支持测试连接与获取模型列表 |
+| **自定义 API** | 配置 Base URL、API Key、模型 ID，支持测试连接与获取模型列表。普通对话可直接检测兼容接口并保存 HTML 报告 |
 | **流式对话** | 增量回复、Markdown 展示、多轮上下文和停止生成 |
 | **并行任务** | 最多同时运行三个会话，可逐个停止、补充或确认。单个任务也可并行分析最多三份独立资料，再汇总结果 |
 | **本地会话** | 自动保存、重启恢复、按回复创建独立分支、重命名、置顶、删除和 Markdown 导出 |

@@ -203,6 +203,7 @@
               <div id="composerTools" class="composer-tools" popover="auto" role="group" aria-label="附件与上下文">
                 <button type="button" id="attach"><span class="ui-icon i-attach" aria-hidden="true"></span>添加文本附件</button>
                 <button type="button" id="referenceFile" hidden><span class="ui-icon i-file" aria-hidden="true"></span>引用项目文件<kbd>@</kbd></button>
+                <button type="button" id="openConnectionCheck" aria-haspopup="dialog"><span class="ui-icon i-link" aria-hidden="true"></span>接口检测</button>
                 <button type="button" id="toggleSystem" aria-expanded="false" aria-controls="systemPanel"><span class="ui-icon i-sliders" aria-hidden="true"></span>系统提示词</button>
               </div>
               <button type="button" id="skillsButton" class="composer-tool" aria-label="选择技能" title="选择技能" aria-haspopup="dialog"><span class="ui-icon i-skill" aria-hidden="true"></span><span id="skillsButtonLabel">技能</span></button>
@@ -387,6 +388,20 @@
       <input id="projectPreviewUrl" type="url" maxlength="2048" placeholder="http://localhost:5173" spellcheck="false" autocomplete="off" required>
       <p id="projectPreviewStatus" class="muted" role="status">请先在项目终端启动开发服务器。</p>
       <div class="dialog-actions"><button id="cancelProjectPreview" type="button" class="quiet">取消</button><button id="startProjectPreview" type="submit" class="primary">打开预览</button></div>
+    </form>
+  </dialog>
+  <dialog id="connectionDialog" class="small-dialog" aria-labelledby="connectionTitle">
+    <form id="connectionForm" class="editor-discard-content" autocomplete="off">
+      <h2 id="connectionTitle">检测模型接口</h2>
+      <p class="muted">读取兼容接口的模型列表，并将 HTML 报告保存到当前会话。</p>
+      <label for="connectionAddress">接口地址</label>
+      <input id="connectionAddress" type="url" maxlength="2048" placeholder="https://api.example.com/v1" spellcheck="false" required autofocus aria-describedby="connectionTarget">
+      <p id="connectionTarget" class="muted"></p>
+      <label for="connectionKey">临时 API 密钥（可选）</label>
+      <input id="connectionKey" type="password" maxlength="1024" autocomplete="off" spellcheck="false" aria-describedby="connectionPrivacy">
+      <p id="connectionPrivacy" class="muted">密钥仅随本次请求发给上方地址。</p>
+      <p id="connectionStatus" class="settings-status" role="status" aria-live="polite" tabindex="-1"></p>
+      <div class="dialog-actions"><button id="cancelConnection" class="quiet" type="button">取消</button><button id="runConnection" class="primary" type="submit">检测并保存报告</button></div>
     </form>
   </dialog>
   <dialog id="newWorkspaceFileDialog" class="small-dialog" aria-labelledby="newWorkspaceFileTitle">
@@ -815,6 +830,8 @@
   <script src="conversation-scene.js"></script>
   <script src="session-navigator.js"></script>
   <script src="renderer-metrics.js"></script>
+  <script src="connection-intent.js"></script>
+  <script src="renderer-connection.js"></script>
   <script src="renderer.js"></script>
   <script src="renderer-media.js"></script>
   <script src="renderer-generation.js"></script>

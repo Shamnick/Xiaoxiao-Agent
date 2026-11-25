@@ -202,11 +202,12 @@ function messageActions(conversation, turn, index) {
   const before = user ? index : turn.recovery?.originalUserIndex ?? index - 1;
   if (messages[before]?.role === 'user') {
     const question = messages[before];
-    const button = messageButton(user ? 'edit' : 'refresh', user ? '编辑并重新发送' : '重新生成', () => {
+    const intent = !user && ConnectionIntent.detect(plain(question.content));
+    const button = intent ? messageButton('refresh', '重新检测接口', () => showConnectionCheck(intent)) : messageButton(user ? 'edit' : 'refresh', user ? '编辑并重新发送' : '重新生成', () => {
       if (user || question.attachment || conversation.agent) openRevisionEditor(conversation, before, user);
       else void replayMessage(id, before, plain(question.content), question.media);
     });
-    button.classList.add('message-replay');
+    button.classList.add(intent ? 'connection-retry' : 'message-replay');
     row.append(button);
   }
   if (!user) {

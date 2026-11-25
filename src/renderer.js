@@ -96,7 +96,9 @@ function update() {
   const disabled = busy || locked;
   $('presenceKnot').disabled = $('enterWorkspace').disabled = $('returnPresence').disabled = locked;
   $('dictate').disabled = locked;
-  $('send').disabled = disabled || !$('modelSelect').value || !$('prompt').value.trim();
+  const canCheck = Boolean(ConnectionIntent.detect($('prompt').value));
+  $('send').disabled = disabled || (!canCheck && !$('modelSelect').value) || !$('prompt').value.trim();
+  $('openConnectionCheck').disabled = disabled;
   $('stop').hidden = !busy;
   $('stop').disabled = !run || run.starting || run.stopping || run.finishing;
   $('stopPending').disabled = $('stop').disabled;
@@ -124,15 +126,16 @@ function update() {
   document.querySelectorAll('.message-fork').forEach(button => { button.disabled = locked; });
   document.querySelectorAll('.message-replay').forEach(button => { button.disabled = disabled || !$('modelSelect').value; });
   document.querySelectorAll('.message-rating').forEach(button => { button.disabled = disabled; });
+  document.querySelectorAll('.connection-retry').forEach(button => { button.disabled = disabled; });
   $('skillsButton').disabled = locked;
   $('skillsButton').hidden = !$('agent').checked;
   $('skillsButtonLabel').textContent = skillIds.length ? `技能 ${skillIds.length}` : '技能';
   $('skillsButton').classList.toggle('selected-tool', Boolean(skillIds.length));
-  $('composer').classList.toggle('needs-model', providers.length === 0);
+  $('composer').classList.toggle('needs-model', providers.length === 0 && !canCheck);
   $('chat').setAttribute('aria-busy', String(busy && !run.interaction));
   $('prompt').placeholder = canSteer(run) ? '补充要求，下一轮送达…' : busy ? '可先起草下一条消息…' : planning ? '描述你想先规划的改动…' : $('agent').checked ? '描述你想完成的任务…' : '输入消息…';
   renderReferences(disabled);
-  $('composerHint').textContent = canSteer(run) ? '补充要求会随下一次模型请求送达' : busy ? '任务结束后即可发送' : providers.length ? (prefs.sendKey === 'modifier' ? '⌘ / Ctrl + Enter 发送 · Enter 换行' : 'Enter 发送 · Shift + Enter 换行') : '连接一个模型即可开始';
+  $('composerHint').textContent = canSteer(run) ? '补充要求会随下一次模型请求送达' : busy ? '任务结束后即可发送' : providers.length ? (prefs.sendKey === 'modifier' ? '⌘ / Ctrl + Enter 发送 · Enter 换行' : 'Enter 发送 · Shift + Enter 换行') : '对话需连接模型，接口检测可直接使用';
   document.querySelectorAll('#history button, #projectList button, #runningList button').forEach(button => { button.disabled = locked; });
   document.querySelectorAll('[data-prompt]').forEach(button => { button.disabled = disabled; });
 }
@@ -464,7 +467,7 @@ function changeView(item, projectId, focus = true) {
   presence.cancelSpeech();
   presence.voiceHint();
   const key = viewKey();
-  const text = $('prompt').value;
+  const text = ConnectionIntent.mask($('prompt').value);
   if (text || attachments.length || (!current && (skillIds.length || systemEdits.has(key)))) {
     unsent.set(key, { text, attachments, skillIds, providerId: $('modelSelect').value, agent: $('agent').checked, planning });
   }
@@ -1135,9 +1138,9 @@ function upsert(conversation, select = false) {
   if (select || current?.id === conversation.id) current = conversation;
   return conversation;
 }
-async function ensureConversation() {
+async function ensureConversation(localOnly = false) {
   if (!current) {
-    if (!$('modelSelect').value) throw new Error('请先添加并选择模型配置');
+    if (!localOnly && !$('modelSelect').value) throw new Error('请先添加并选择模型配置');
     const agent = $('agent').checked, systemPrompt = $('systemPrompt').value;
     const homeKey = viewKey();
     upsert(await api.conversations.create({providerId:$('modelSelect').value, projectId: selectedProjectId}), true);
@@ -1780,6 +1783,11 @@ async function submitUpdate(run, immediate = false) {
   const source = $('prompt').value;
   const text = source.trim();
   if (!text || !canSteer(run) || run.submittingUpdate) return;
+  if (ConnectionIntent.mask(text) !== text) {
+    $('prompt').value = ConnectionIntent.mask(source);
+    showError('已隐藏密钥。请在任务结束后打开「＋ → 接口检测」。');
+    return;
+  }
   run.submittingUpdate = true;
   update();
   try {
@@ -1792,7 +1800,14 @@ async function submitUpdate(run, immediate = false) {
 }
 $('resumeTask').onclick = () => sendMessage('继续上次未完成的任务', true);
 async function sendMessage(text, resume = false, media = []) {
-  if (currentRun() || locked || !text || !$('modelSelect').value) return;
+  if (currentRun() || locked || !text) return;
+  const intent = !resume && ConnectionIntent.detect(text);
+  if (intent) {
+    $('prompt').value = ConnectionIntent.mask($('prompt').value);
+    showConnectionCheck(intent, true);
+    return;
+  }
+  if (!$('modelSelect').value) return;
   locked = true;
   $('errorBanner').hidden = true;
   update();
@@ -1860,6 +1875,7 @@ async function initialize() {
 }
 installConversationField($('conversationField'));
 const presence = createPresence();
+const showConnectionCheck = installConnectionCheck();
 installSessionActions();
 installRevisionEditor();
 initialize();

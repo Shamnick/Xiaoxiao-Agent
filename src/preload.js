@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld('nova', {
   },
   media: { analyze: call('media:analyze'), cancel: call('media:cancel') },
   generation: { run: call('generation:run'), cancel: call('generation:cancel'), save: call('generation:save'), saveAll: call('generation:saveAll'), onEvent: subscribe('generation:event') },
-  messages: { copy: call('messages:copy'), rate: call('messages:rate'), saveFile: call('messages:saveFile'),
+  messages: { checkConnection: call('messages:checkConnection'), copy: call('messages:copy'), rate: call('messages:rate'), saveFile: call('messages:saveFile'),
     openArtifact: call('messages:openArtifact') },
   conversations: {
     list: call('conversations:list'), create: call('conversations:create'), save: call('conversations:save'),
