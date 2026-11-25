@@ -47,8 +47,8 @@ class MCPManager {
     this.signal?.throwIfAborted();
     this.controller.signal.throwIfAborted();
   }
-  // Bound even approvals and transports that fail to honor SDK request cancellation.
-  async _bounded(operation) {
+  // Keep transport deadlines separate from the time the user needs to review a request.
+  async _bounded(operation, timeout = TIMEOUT) {
     this._check();
     const controller = new AbortController();
     const parent = this.controller.signal;
@@ -59,10 +59,10 @@ class MCPManager {
         controller.abort(error); reject(error);
       };
       parent.addEventListener('abort', abort, { once: true });
-      timer = setTimeout(() => {
+      if (timeout) timer = setTimeout(() => {
         const error = new Error('MCP operation timed out');
         controller.abort(error); reject(error);
-      }, TIMEOUT);
+      }, timeout);
     });
     try {
       const result = await Promise.race([Promise.resolve().then(() => {
@@ -75,7 +75,7 @@ class MCPManager {
   }
   async _consent(title, detail) {
     if (detail.length > 13000) throw new Error('MCP approval detail exceeds full-preview limit');
-    if (typeof this.approve !== 'function' || await this._bounded(() => this.approve({ title, detail })) !== true) throw new Error('MCP approval denied');
+    if (typeof this.approve !== 'function' || await this._bounded(() => this.approve({ title, detail }), 0) !== true) throw new Error('MCP approval denied');
     this._check();
   }
   async _dispose(connection) {

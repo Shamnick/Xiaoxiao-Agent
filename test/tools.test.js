@@ -19,7 +19,7 @@ const command = js => quote(process.execPath) + ' -e ' + quote(js);
 test('real workspace reads, bounded listings and canonical symlink containment', async t => {
   const { base, workspace, tools } = await setup(t);
   await fs.writeFile(path.join(workspace, 'big.txt'), 'a'.repeat(70000));
-  assert.deepEqual(Object.keys(tools).sort(), ['list_files', 'read_file', 'run_command', 'write_file']);
+  assert.deepEqual(Object.keys(tools).sort(), ['edit_file', 'list_files', 'read_file', 'run_command', 'search_workspace', 'write_file']);
   const read = await tools.read_file.execute({ path: 'big.txt' });
   assert.equal(Buffer.byteLength(read.content), 65536);
   assert.equal(read.truncated, true);
@@ -121,3 +121,19 @@ test('write approval displays full content within native UI preview length', asy
   await assert.rejects(tools.write_file.execute({ path: 'review', content: content + 'x' }), /12 KiB/);
 });
 
+
+test('ranges reassemble UTF-8 source exactly with no missing characters or split emoji', async t => {
+  const { workspace, tools } = await setup(t);
+  const original = '中🙂a文🙂末尾';
+  await fs.writeFile(path.join(workspace, 'utf8.txt'), original);
+  let offset = 0, text = '';
+  do {
+    const result = await tools.read_file.execute({ path: 'utf8.txt', offset_bytes: offset, max_bytes: 4 });
+    text += result.content;
+    if (result.truncated) assert(result.next_offset_bytes > offset);
+    offset = result.next_offset_bytes;
+  } while (offset !== undefined);
+  assert.equal(text, original);
+  await assert.rejects(tools.read_file.execute({ path: 'utf8.txt', offset_bytes: 1 }), /UTF-8/);
+  await assert.rejects(tools.read_file.execute({ path: 'utf8.txt', offset_bytes: -1 }), /range/);
+});

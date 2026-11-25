@@ -3,12 +3,17 @@ const fs = require('node:fs/promises');
 const { constants } = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { inspect, workspaceDiff, applyReviewedWrite } = require('./workspace-review');
+const { searchWorkspace } = require('./workspace-search');
+const { relativeSegments } = require('./workspace-files');
+const { replaceUnique } = require('./workspace-editor');
+const { verifyWrittenText } = require('./write-verification');
 const LIMIT = 64 * 1024;
 
 // Containment applies to file tools. Commands run with user privileges; cwd is not a sandbox.
-async function createTools({ workspace, approve, signal, mcp } = {}) {
+async function createTools({ workspace, approve, signal, mcp, onWrite, readOnly = false } = {}) {
   if (workspace === undefined || workspace === null || workspace === '') {
-    return mcp ? await mcp.tools() : [];
+    return mcp && !readOnly ? await mcp.tools() : [];
   }
   const root = await fs.realpath(workspace);
   if (!(await fs.stat(root)).isDirectory()) throw new Error('Workspace must be a directory');
@@ -26,39 +31,88 @@ async function createTools({ workspace, approve, signal, mcp } = {}) {
     const target = contained(path.resolve(root, value));
     return contained(await fs.realpath(target));
   }
-  async function consent(title, detail) {
+  async function consent(title, detail, review) {
     check();
-    if (typeof approve !== 'function' || await approve({ title, detail }) !== true) {
-      throw new Error('Approval denied');
+    if (typeof approve !== 'function' || await approve({ title, detail, ...(review && { review }) }) !== true) {
+      throw Object.assign(new Error('Approval denied'), { code: 'APPROVAL_DENIED' });
     }
     check();
   }
   const schema = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
   const string = { type: 'string' };
+  async function changeFile(value, nextContent, { fullPreview }) {
+    if (typeof value !== 'string' || !value || value.includes('\0')) throw new Error('Invalid path');
+    const candidate = contained(path.resolve(root, value));
+    const parent = await resolve(path.dirname(candidate));
+    const target = contained(path.join(parent, path.basename(candidate)));
+    const relative = path.relative(root, target).split(path.sep).join('/');
+    if (!relativeSegments(relative).length) throw new Error('Invalid file target');
+    async function verifyParent() {
+      check();
+      try {
+        if (await fs.realpath(root) === root && await resolve(path.dirname(candidate)) === parent) return;
+      } catch (error) { check(); }
+      throw Object.assign(new Error('工作目录已变更。请重新选择工作目录。'), { code: 'WORKSPACE_CHANGED' });
+    }
+    let review, bytesWritten, verification;
+    try {
+      const before = await inspect(target, signal);
+      const content = nextContent(before);
+      bytesWritten = Buffer.byteLength(content);
+      if (bytesWritten > LIMIT) throw new Error('Result exceeds 64 KiB');
+      if (before && before.text === content) return { path: relative, bytesWritten: 0, unchanged: true };
+      review = { ...workspaceDiff(relative, before?.text ?? null, content), workspace: root };
+      const title = fullPreview ? 'Write workspace file (' + bytesWritten + ' bytes, full preview)' : 'Edit workspace file';
+      const detail = 'Path: ' + relative + '\nUTF-8 bytes: ' + bytesWritten + (fullPreview ? '\nFull content:\n' + content : '');
+      if (detail.length > 13000) throw new Error('Write approval detail exceeds full-preview limit');
+      await consent(title, detail, review);
+      await applyReviewedWrite({ target, content, before, verifyParent, signal });
+      verification = await verifyWrittenText(target, content, verifyParent);
+    } catch (error) {
+      if (error.code === 'WORKSPACE_CHANGED' || error.code === 'APPROVAL_DENIED') error.workspaceFile = relative;
+      throw error;
+    }
+    onWrite?.(review);
+    return { path: relative, bytesWritten, verification };
+  }
   const tools = [
     {
-      name: 'read_file', description: 'Read up to 64 KiB of a UTF-8 file inside the workspace.',
-      parameters: schema({ path: string }, ['path']),
-      async execute({ path: value } = {}) {
+      name: 'search_workspace', parallelRead: true, description: 'Find filenames or literal text across the selected workspace. Returns relative paths, matching lines and excerpts. Skips common caches, secret files and ignored untracked Git files. If limited, narrow the query.',
+      parameters: schema({ query: { type: 'string', minLength: 1, maxLength: 200 }, kind: { type: 'string', enum: ['files', 'content'] } }, ['query']),
+      execute: input => searchWorkspace(root, { ...input, signal })
+    },
+    {
+      name: 'read_file', parallelRead: true, description: 'Read a UTF-8 file in the workspace. Use max_bytes for shorter excerpts and continue at next_offset_bytes while truncated.',
+      parameters: schema({ path: string, offset_bytes: { type: 'integer', minimum: 0 }, max_bytes: { type: 'integer', minimum: 4, maximum: LIMIT } }, ['path']),
+      async execute({ path: value, offset_bytes = 0, max_bytes = LIMIT } = {}) {
+        if (!Number.isSafeInteger(offset_bytes) || offset_bytes < 0 || !Number.isInteger(max_bytes) || max_bytes < 4 || max_bytes > LIMIT) throw Error('Invalid read range');
         const target = await resolve(value);
         const file = await fs.open(target, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
         try {
           const stat = await file.stat();
           if (!stat.isFile()) throw new Error('Path must be a regular file');
-          const buffer = Buffer.alloc(LIMIT + 1);
+          if (offset_bytes > stat.size) throw Error('Read offset exceeds file size');
+          const buffer = Buffer.alloc(max_bytes + 1);
           let size = 0;
           while (size < buffer.length) {
             check();
-            const { bytesRead } = await file.read(buffer, size, buffer.length - size, null);
+            const { bytesRead } = await file.read(buffer, size, buffer.length - size, offset_bytes + size);
             if (!bytesRead) break;
             size += bytesRead;
           }
-          return { path: path.relative(root, target), content: buffer.subarray(0, Math.min(size, LIMIT)).toString('utf8'), truncated: size > LIMIT };
+          const truncated = size > max_bytes;
+          let end = Math.min(size, max_bytes);
+          // Preserve character boundaries so adjacent pages concatenate losslessly.
+          while (truncated && end > 0 && (buffer[end] & 0xc0) === 0x80) end--;
+          const chunk = buffer.subarray(0, end);
+          if ((truncated && !end) || !require('node:buffer').isUtf8(chunk)) throw Error('Expected a UTF-8 file and a character-aligned offset');
+          return { path: path.relative(root, target), content: chunk.toString('utf8'), truncated,
+            ...(truncated && { next_offset_bytes: offset_bytes + end }) };
         } finally { await file.close(); }
       }
     },
     {
-      name: 'list_files', description: 'List at most 500 direct workspace directory entries; does not follow symlinks.',
+      name: 'list_files', parallelRead: true, description: 'List at most 500 direct workspace directory entries; does not follow symlinks.',
       parameters: schema({ path: string }),
       async execute({ path: value = '.' } = {}) {
         const target = await resolve(value);
@@ -75,39 +129,20 @@ async function createTools({ workspace, approve, signal, mcp } = {}) {
       }
     },
     {
-      name: 'write_file', description: 'Write UTF-8 text (up to 12 KiB) to an existing workspace directory, after approval.',
+      name: 'write_file', description: 'Write UTF-8 text (up to 12 KiB) to an existing workspace directory after the user reviews the change. Prefer edit_file for targeted edits to existing code.',
       parameters: schema({ path: string, content: string }, ['path', 'content']),
       async execute({ path: value, content } = {}) {
-        if (typeof value !== 'string' || !value || value.includes('\0') || typeof content !== 'string') throw new Error('Invalid path or content');
+        if (typeof content !== 'string' || content.includes('\0')) throw new Error('Invalid content');
         if (Buffer.byteLength(content) > 12 * 1024) throw new Error('Write exceeds 12 KiB');
-        const candidate = contained(path.resolve(root, value));
-        const parent = await resolve(path.dirname(candidate));
-        const target = contained(path.join(parent, path.basename(candidate)));
-        // Reject final symlinks, including dangling ones, instead of following on create.
-        async function validate() {
-          check();
-          contained(await fs.realpath(parent));
-          try {
-            const stat = await fs.lstat(target);
-            if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Write target must be a regular file, not a symlink');
-            contained(await fs.realpath(target));
-          } catch (error) { if (error.code !== 'ENOENT') throw error; }
-        }
-        await validate();
-        const detail = 'Path: ' + path.relative(root, target) + '\nUTF-8 bytes: ' + Buffer.byteLength(content) + '\nFull content:\n' + content;
-        if (detail.length > 13000) throw new Error('Write approval detail exceeds full-preview limit');
-        await consent('Write workspace file (' + Buffer.byteLength(content) + ' bytes, full preview)', detail);
-        await validate();
-        const file = await fs.open(target, constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
-        try {
-          const stat = await file.stat();
-          if (!stat.isFile() || stat.nlink > 1) throw new Error('Write target must be a regular file without hard links');
-          check();
-          await file.truncate(0);
-          await file.writeFile(content, { encoding: 'utf8', signal });
-        } finally { await file.close(); }
-        return { path: path.relative(root, target), bytesWritten: Buffer.byteLength(content) };
+        return changeFile(value, () => content, { fullPreview: true });
       }
+    },
+    {
+      name: 'edit_file', description: 'Apply up to eight exact text replacements to an existing UTF-8 file up to 64 KiB. Copy each old_text exactly from the file and include enough context for a unique match. All edits are reviewed together before writing.',
+      parameters: schema({ path: string, edits: { type: 'array', minItems: 1, maxItems: 8, items: schema({
+        old_text: { type: 'string', minLength: 1, maxLength: 12000 }, new_text: { type: 'string', maxLength: 12000 }
+      }, ['old_text', 'new_text']) } }, ['path', 'edits']),
+      execute: ({ path: value, edits } = {}) => changeFile(value, before => replaceUnique(before?.text, edits), { fullPreview: false })
     },
     {
       name: 'run_command', description: 'Run an approved shell command in the workspace. NO OS SANDBOX: commands can access files and network with your user privileges. Combined output capped at 64 KiB; timeout at most 60 seconds.',
@@ -163,6 +198,7 @@ async function createTools({ workspace, approve, signal, mcp } = {}) {
       }
     }
   ];
+  if (readOnly) return tools.filter(tool => ['read_file', 'list_files', 'search_workspace'].includes(tool.name));
   if (mcp) tools.push(...await mcp.tools());
   return tools;
 }

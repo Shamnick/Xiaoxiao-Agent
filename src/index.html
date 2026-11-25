@@ -3,41 +3,822 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'nonce-h4Pl6tlYEReaB14x0Jr7IA=='; img-src 'self' data:; media-src blob: data:; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="editor-style-nonce" content="h4Pl6tlYEReaB14x0Jr7IA==">
   <title>Xiaoxiao Agent</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="generated/terminal.css">
+  <link rel="stylesheet" href="workbench.css">
+  <link rel="stylesheet" href="presence.css">
+  <link rel="stylesheet" href="conversation-scene.css">
+  <link rel="stylesheet" href="conversation-metrics.css">
+  <link rel="stylesheet" href="session-navigator.css">
+  <link rel="stylesheet" href="proof-studio.css">
 </head>
-<body>
-  <aside class="sidebar" aria-label="侧边栏">
-    <a class="brand" href="#" id="brandHome"><img class="logo" src="brand.png" alt=""><span><strong id="brandName">Xiaoxiao Agent</strong><small>你的个人智能工作空间</small></span></a>
-    <button id="newChat" class="new-chat"><span aria-hidden="true">＋</span> 开启新对话 <kbd>⌘ N</kbd></button>
-    <div class="section-label">对话记录 <span id="historyCount">0</span></div>
-    <nav id="history" class="history" aria-label="对话记录"><p class="muted">正在加载对话…</p></nav>
-    <button id="navSettings" class="settings-link"><span aria-hidden="true">⚙</span><span>设置与模型<small>连接模型 · 管理工具</small></span><span aria-hidden="true">↗</span></button>
-    <div class="sidebar-footer"><span class="dot"></span> 本地工作空间 <span class="version">XIAOXIAO</span></div>
-  </aside>
-  <main class="main">
-    <header class="topbar"><div class="breadcrumb">工作空间 <span aria-hidden="true">/</span> <strong id="conversationTitle">新对话</strong></div><div class="header-actions"><span id="runBadge" class="badge">准备就绪</span><button id="settings" class="quiet">模型设置</button></div></header>
-    <div id="errorBanner" class="error-banner" role="alert" hidden><span id="errorText"></span><button id="dismissError" aria-label="关闭错误提示">×</button></div>
-    <section class="conversation-toolbar" aria-label="对话操作"><span id="conversationMeta">让想法，从这里开始。</span><div><button id="renameConversation" class="quiet" disabled>重命名</button><button id="exportConversation" class="quiet" disabled>导出</button><button id="deleteConversation" class="quiet danger" disabled>删除</button></div></section>
-    <div id="scrollArea" class="scroll-area">
-      <section id="hero" class="hero"><div class="eyebrow"><span class="dot"></span> A LITTLE HELP. A LOT OF POSSIBILITY.</div><img class="hero-logo" src="brand.png" alt=""><h1>你好，有什么想一起完成的？</h1><p>从一个问题，到一个完整的想法。<br>让 <span id="heroBrand">Xiaoxiao Agent</span> 陪你往前一步。</p><div class="suggestions"><button data-prompt="请帮我梳理下面这个想法，并制定一个清晰、可执行的计划："><span aria-hidden="true">✧</span><strong>梳理一个想法</strong><small>把灵感变成下一步</small><span class="arrow" aria-hidden="true">↗</span></button><button data-prompt="请阅读我附加的文本，提炼核心观点、关键细节和待确认的问题。"><span aria-hidden="true">▤</span><strong>读懂一份资料</strong><small>提炼重点，发现线索</small><span class="arrow" aria-hidden="true">↗</span></button><button data-prompt="请先查看工作目录，介绍项目结构，并告诉我你能协助完成哪些任务。"><span aria-hidden="true">⌘</span><strong>探索我的项目</strong><small>选择目录，协作完成</small><span class="arrow" aria-hidden="true">↗</span></button></div></section>
-      <section id="chat" class="chat" aria-label="对话消息" aria-busy="false"></section>
-      <details id="activityPanel" class="activity-panel" hidden><summary>运行活动 <span id="activityCount">0</span></summary><div id="activityLog" role="log" aria-live="polite"></div></details>
+<body class="presence-home">
+  <button id="toggleSidebar" class="icon-button sidebar-toggle" aria-label="显示侧边栏" aria-expanded="false" aria-controls="sidebar" title="显示侧边栏"><span class="ui-icon i-side" aria-hidden="true"></span></button>
+  <aside class="sidebar" id="sidebar" aria-label="侧边栏" hidden>
+    <a class="brand" href="#" id="brandHome" aria-label="Xiaoxiao Agent 首页"><img class="logo" src="brand-mark.png" alt="" width="22" height="22"><strong id="brandName">Xiaoxiao Agent</strong></a>
+    <button id="enterWorkspace" class="settings-link" type="button"><span class="ui-icon i-panel" aria-hidden="true"></span>进入工作区</button>
+    <div class="sidebar-actions">
+      <button id="newChat" class="new-chat"><span class="ui-icon i-edit" aria-hidden="true"></span><span id="newChatLabel">新任务</span></button>
+      <button id="findHistory" class="icon-button" aria-label="会话导航" title="会话导航" aria-haspopup="dialog"><span class="ui-icon i-search" aria-hidden="true"></span></button>
     </div>
-    <div class="compose-area"><div class="context-row"><label class="agent-switch"><input type="checkbox" id="agent" checked> Agent 模式</label><button id="workspace" class="quiet workspace" title="选择此对话的工作目录">▱ 选择工作目录</button><button id="toggleSystem" class="quiet" aria-expanded="false" aria-controls="systemPanel">系统提示词</button></div><div id="systemPanel" class="system-panel" hidden><label for="systemPrompt">对话系统提示词</label><textarea id="systemPrompt" rows="3" placeholder="例如：用中文回答，修改代码前先解释思路。"></textarea><div><span id="contextStatus" role="status"></span><button id="saveContext" class="quiet" type="button">保存对话设置</button></div></div>
-    <form class="composer" id="composer"><label class="sr-only" for="prompt">输入消息</label><textarea id="prompt" rows="3" maxlength="64000" placeholder="输入你的想法，或交给我一个任务…"></textarea><div id="attachmentLabel" class="attachment-label" hidden><span id="attachmentText"></span><button id="clearAttachment" type="button" aria-label="移除附件">×</button></div><div class="composer-row"><label class="sr-only" for="modelSelect">当前模型配置</label><select id="modelSelect"><option value="">正在加载模型…</option></select><button type="button" id="attach" class="quiet" title="附加文本文件">＋ 附件</button><span class="composer-spacer"></span><button type="button" id="stop" class="stop" hidden>■ 停止生成</button><button id="send" class="primary send" type="submit" disabled><span>发送</span> <span aria-hidden="true">↑</span></button></div></form><div class="composer-footer"><span id="composerHint">Enter 发送 · Shift + Enter 换行</span><span>为你的想法，留一点空间。</span></div></div>
+    <section id="runningSection" class="running-section" hidden aria-labelledby="runningTitle">
+      <div class="section-label"><span id="runningTitle">正在进行</span><small id="runningCount"></small></div>
+      <nav id="runningList" aria-label="运行中的会话"></nav>
+    </section>
+    <div class="section-label project-heading"><span>项目</span><div class="project-actions"><button id="openFolder" class="icon-button" aria-label="打开文件夹" title="打开文件夹"><span class="ui-icon i-folder-open" aria-hidden="true"></span></button><button id="newProject" class="icon-button" aria-label="新建项目" title="新建项目"><span class="ui-icon i-plus" aria-hidden="true"></span></button></div></div>
+    <nav class="project-list" id="projectList" aria-label="项目列表"></nav>
+    <div id="projectScope" class="section-label"><span id="historyLabel">最近会话</span><span id="historyCount" class="sr-only">0</span><button id="editProject" class="icon-button" aria-label="编辑当前项目" title="编辑当前项目" hidden><span class="ui-icon i-settings" aria-hidden="true"></span></button></div>
+    <nav id="history" class="history" aria-label="对话记录"><p class="muted">正在加载对话…</p></nav>
+    <div class="sidebar-footer">
+      <button id="openProofFromRail" class="settings-link" type="button" aria-haspopup="dialog"><span class="ui-icon i-compare" aria-hidden="true"></span> 局部改稿</button>
+      <button id="openGenerationStudio" class="settings-link" type="button" aria-controls="generationStudio"><span class="ui-icon i-sparkles" aria-hidden="true"></span> 创作中心</button>
+      <button id="openMediaLab" class="settings-link" type="button" aria-haspopup="dialog"><span class="ui-icon i-media" aria-hidden="true"></span> 视觉实验室</button>
+      <button id="schedulesButton" class="settings-link" aria-haspopup="dialog"><span class="ui-icon i-calendar" aria-hidden="true"></span> 计划任务</button>
+      <button id="settings" class="settings-link" aria-haspopup="dialog"><span class="ui-icon i-settings" aria-hidden="true"></span> 设置</button>
+    </div>
+  </aside>
+  <button id="presenceBackdrop" type="button" aria-label="收起导航" tabindex="-1" hidden></button>
+  <section id="presence" aria-label="Xiaoxiao Agent 对话首页">
+    <div class="presence-titlebar" aria-hidden="true">
+      <div class="presence-wordmark"><span id="presenceBrand">Xiaoxiao</span><small id="presenceBrandSuffix">Agent</small></div>
+    </div>
+    <div class="presence-field" aria-hidden="true"><canvas id="silkField"></canvas></div>
+    <div class="presence-metric metric-load" title="主进程的 CPU 使用率，以一个逻辑核心为 100%">
+      <span>主进程 CPU</span><strong id="presenceCpu">—</strong>
+      <svg viewBox="0 0 120 26" aria-hidden="true"><polyline id="presenceCpuPlot"/></svg>
+    </div>
+    <div class="presence-metric metric-memory" title="主进程当前占用的常驻内存">
+      <span>常驻内存</span><strong id="presenceMemory">—</strong>
+      <svg viewBox="0 0 120 26" aria-hidden="true"><polyline id="presenceMemoryPlot"/></svg>
+    </div>
+    <div class="presence-center">
+      <button id="presenceKnot" type="button" aria-expanded="false" aria-controls="presenceEntry" aria-label="开始语音或文字对话" disabled>
+        <span class="presence-sculpture"><span class="silk-body">
+          <img src="silk-knot.png" width="900" height="620" alt="">
+          <canvas id="silkSurface" aria-hidden="true" hidden></canvas>
+          <canvas id="silkDust" aria-hidden="true"></canvas>
+        </span></span>
+        <span id="presenceHint">点击丝结，开始对话</span>
+      </button>
+      <div id="presenceEntry" hidden></div>
+      <button id="openProofFromKnot" type="button" aria-haspopup="dialog">试试局部改稿 <span aria-hidden="true">↗</span></button>
+    </div>
+    <footer class="presence-footer"><time id="presenceClock" aria-label="本地时间"></time></footer>
+  </section>
+  <main class="main" inert>
+    <header class="topbar">
+      <div class="topbar-leading">
+        <button id="returnPresence" class="icon-button" type="button" title="返回丝结首页" aria-label="返回丝结首页"><img src="silk-knot.png" alt="" width="36" height="25"><span class="room-wordmark" aria-hidden="true"><b id="roomBrand">Xiaoxiao</b><small id="roomBrandSuffix">Agent</small></span></button>
+        <span id="workspaceHomeLabel" class="workspace-home-label"><span class="ui-icon i-panel" aria-hidden="true"></span> 工作区</span>
+        <span id="conversationScope" class="conversation-scope" hidden><span id="conversationProject"></span><span class="ui-icon i-chevron" aria-hidden="true"></span></span>
+        <strong id="conversationTitle" hidden></strong>
+        <button id="branchSource" class="icon-button" aria-label="打开原会话" hidden><span class="ui-icon i-git" aria-hidden="true"></span></button>
+        <button id="conversationMenu" class="icon-button" aria-label="会话操作" aria-haspopup="menu" hidden><span class="ui-icon i-more" aria-hidden="true"></span></button>
+      </div>
+      <div class="header-actions">
+        <span id="runBadge" class="badge" role="status" hidden><span class="status-dot" aria-hidden="true"></span><span id="runStatus"></span></span>
+        <button id="developmentMode" type="button" class="toolbar-action development-toggle" aria-label="开发工作台" aria-pressed="false" aria-controls="filePreview" title="开发工作台 · ⌘2" hidden><span class="ui-icon i-code" aria-hidden="true"></span><span>开发</span></button>
+        <button id="projectSearchButton" type="button" class="icon-button" aria-label="搜索项目" aria-haspopup="dialog" title="搜索项目 · ⇧⌘F" hidden><span class="ui-icon i-search" aria-hidden="true"></span></button>
+        <button id="openProjectPreview" type="button" class="icon-button" aria-label="项目预览" title="项目预览" aria-haspopup="dialog" hidden><span class="ui-icon i-panel" aria-hidden="true"></span></button>
+        <button id="terminalButton" type="button" class="icon-button terminal-shortcut" aria-label="项目终端" title="项目终端 · ⌃`" aria-expanded="false" aria-controls="terminalPanel" hidden><span aria-hidden="true">&gt;_</span></button>
+        <button id="workspaceGitButton" type="button" class="icon-button git-shortcut" aria-label="Git 改动" aria-controls="taskPane" aria-expanded="false" title="Git 改动" hidden><span class="ui-icon i-git" aria-hidden="true"></span></button>
+        <button id="workspaceBrowserButton" type="button" class="toolbar-action" aria-controls="taskPane" aria-expanded="false" title="浏览工作区文件" hidden><span class="ui-icon i-folder" aria-hidden="true"></span><span>文件</span></button>
+        <button id="toggleTaskPane" class="icon-button" aria-label="显示任务详情" aria-expanded="false" aria-controls="taskPane" title="任务详情" hidden><span class="ui-icon i-pane" aria-hidden="true"></span></button>
+        <button id="schedulesCompact" class="icon-button compact-settings" aria-label="计划任务" title="计划任务" aria-haspopup="dialog"><span class="ui-icon i-calendar" aria-hidden="true"></span></button>
+        <button id="settingsCompact" class="icon-button compact-settings" aria-label="设置" title="设置" aria-haspopup="dialog"><span class="ui-icon i-settings" aria-hidden="true"></span></button>
+      </div>
+    </header>
+    <div id="errorBanner" class="error-banner" role="alert" hidden><span id="errorText"></span><button id="dismissError" aria-label="关闭错误提示"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+    <div class="workbench">
+      <div id="chatColumn" class="chat-column">
+        <div id="conversationField" class="conversation-field" aria-hidden="true"><canvas></canvas></div>
+        <div id="editorAgentBar" class="editor-agent-bar" hidden>Agent</div>
+        <div id="conversationMetrics" class="conversation-metrics" hidden>
+          <button id="metricsToggle" type="button" popovertarget="metricsDetail" aria-label="查看会话统计详情">
+            <span class="metric-chip"><i class="metric-icon metric-gauge" aria-hidden="true"></i><span><b id="metricRounds">0</b> 轮</span><span><b id="metricSteps">—</b> 步</span><i class="metric-dot" aria-hidden="true"></i><span><b id="metricRate">—</b> tok/s</span></span>
+            <span class="metric-chip"><i class="metric-icon metric-database" aria-hidden="true"></i><span><b id="metricTokens">—</b> tok</span><i class="metric-dot" aria-hidden="true"></i><span><span class="metric-cache-label">缓存</span>命中 <b id="metricCache">—</b></span></span>
+            <span class="metric-chip metric-context"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><circle id="metricArc" cx="10" cy="10" r="7.5" pathLength="100" stroke-dasharray="0 100"/></svg><span>本地预算 <b id="metricContext">—</b></span></span>
+          </button>
+          <div id="metricsDetail" popover aria-label="会话统计详情">
+            <strong>会话统计</strong>
+            <dl>
+              <dt>对话与执行</dt><dd id="metricExecutionNote"></dd>
+              <dt>输出速度</dt><dd id="metricRateNote"></dd>
+              <dt>首段正文</dt><dd id="metricFirstBody"></dd>
+              <dt>请求耗时</dt><dd id="metricElapsed"></dd>
+              <dt>输入 / 输出</dt><dd id="metricBreakdown"></dd>
+              <dt>用量覆盖</dt><dd id="metricCoverage"></dd>
+              <dt>Token 用量</dt><dd id="metricUsageNote"></dd>
+              <dt>缓存命中</dt><dd id="metricCacheNote"></dd>
+              <dt>上下文圆环</dt><dd id="metricContextNote"></dd>
+            </dl>
+          </div>
+        </div>
+        <div id="scrollArea" class="scroll-area">
+          <section id="chat" class="chat" aria-label="对话消息" aria-busy="false"></section>
+          <div class="workspace-notice" id="writeConflict" role="status" hidden>
+            <span class="ui-icon i-lock" aria-hidden="true"></span><div><strong>文件未写入</strong><p id="writeConflictDetail"></p></div>
+          </div>
+          <div id="taskOutputs" class="task-outputs" aria-label="任务结果" role="group" hidden>
+            <button id="continuePlan" class="output-action" type="button" hidden>
+              <span class="output-icon"><span class="ui-icon i-play" aria-hidden="true"></span></span>
+              <span class="output-text"><strong>按计划执行</strong><small>切换到任务并准备下一条消息</small></span>
+              <span class="ui-icon i-chevron" aria-hidden="true"></span>
+            </button>
+            <button id="taskSummary" class="output-action" type="button" aria-expanded="false" aria-controls="taskPane" hidden>
+              <span class="output-icon"><span class="ui-icon i-task" aria-hidden="true"></span></span>
+              <span class="output-text"><strong>任务清单</strong><small id="taskSummaryCount"></small></span>
+              <span class="ui-icon i-chevron" aria-hidden="true"></span>
+            </button>
+            <button id="changesShortcut" class="output-action" type="button" aria-expanded="false" aria-controls="taskPane" hidden>
+              <span class="output-icon"><span class="ui-icon i-compare" aria-hidden="true"></span></span>
+              <span class="output-text"><strong>文件改动</strong><small id="changesShortcutCount"></small></span>
+              <span class="ui-icon i-chevron" aria-hidden="true"></span>
+            </button>
+            <button id="draftShortcut" class="output-action" type="button" aria-haspopup="dialog" hidden>
+              <span class="output-icon"><span class="ui-icon i-file" aria-hidden="true"></span></span>
+              <span class="output-text"><strong id="draftShortcutName"></strong><small id="draftShortcutMeta"></small></span>
+              <span class="ui-icon i-chevron" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+        <div class="compose-area">
+          <section id="hero" class="workspace-heading" aria-labelledby="welcomeTitle">
+            <div class="welcome-copy">
+              <h1 id="welcomeTitle">今天，一起做点什么？</h1>
+              <p id="welcomeHint">写下任务，或打开一个项目文件夹。</p>
+            </div>
+            <img class="silk-knot" src="silk-knot.png" alt="" width="228" height="168">
+          </section>
+          <section id="interactionPanel" class="interaction-panel" hidden aria-labelledby="interactionTitle">
+            <div class="interaction-header">
+              <span id="interactionIcon" class="ui-icon i-chat" aria-hidden="true"></span><h2 id="interactionTitle" role="status"></h2>
+              <button id="stopPending" type="button" class="quiet danger" aria-label="停止此任务" title="停止此任务"><span class="ui-icon i-stop" aria-hidden="true"></span> 停止任务</button>
+            </div>
+            <p id="interactionQuestion"></p>
+            <button id="openChangeReview" type="button" class="change-review-trigger" aria-haspopup="dialog" hidden>
+              <span class="review-file-icon"><span class="ui-icon i-compare" aria-hidden="true"></span></span>
+              <span class="change-file"><strong id="approvalFileName"></strong><small id="approvalFileInfo"></small></span>
+              <span id="approvalFileCounts" class="change-counts"></span>
+              <span class="ui-icon i-chevron" aria-hidden="true"></span>
+            </button>
+            <pre id="approvalDetail" tabindex="0" aria-label="完整操作详情" hidden></pre>
+            <div id="questionOptions" class="question-options" aria-label="建议回答" role="group"></div>
+            <form id="answerForm" hidden>
+              <label for="answerText" class="sr-only">你的回答</label>
+              <textarea id="answerText" rows="2" maxlength="4000" placeholder="输入你的回答…"></textarea>
+              <div class="interaction-actions"><span id="interactionStatus" role="status"></span><button id="sendAnswer" type="submit" class="primary" disabled>提交回答</button></div>
+            </form>
+            <div id="approvalActions" class="interaction-actions" hidden><span id="approvalStatus" role="status"></span><button id="denyApproval" type="button" class="quiet">拒绝</button><button id="allowApproval" type="button" class="primary">允许本次</button></div>
+          </section>
+          <div id="resumePanel" class="resume-panel" hidden>
+            <span id="resumeHint"></span><button id="resumeTask" type="button" class="quiet">继续任务</button>
+          </div>
+          <div id="systemPanel" class="system-panel" hidden>
+            <header>
+              <label for="systemPrompt">对话系统提示词</label>
+              <button id="closeSystem" type="button" class="icon-button" aria-label="收起系统提示词" title="收起系统提示词 (Esc)"><span class="ui-icon i-close" aria-hidden="true"></span></button>
+            </header>
+            <textarea id="systemPrompt" rows="3" maxlength="16000" placeholder="例如：用中文回答，修改代码前先解释思路。"></textarea>
+            <div><span id="contextStatus" role="status"></span><button id="saveContext" class="quiet" type="button">保存对话设置</button></div>
+          </div>
+          <form class="composer" id="composer">
+            <div id="composeMeta" class="compose-meta">
+              <div class="mode-control" aria-label="会话模式" role="group">
+                <button id="chatMode" type="button" aria-pressed="false"><span class="ui-icon i-chat" aria-hidden="true"></span> 对话</button>
+                <button id="planMode" type="button" aria-pressed="false" title="先只读检查项目并拟定方案"><span class="ui-icon i-plan" aria-hidden="true"></span> 计划</button>
+                <button id="taskMode" type="button" aria-pressed="true"><span class="ui-icon i-task" aria-hidden="true"></span> 任务</button>
+                <input id="agent" type="checkbox" checked hidden aria-label="Agent 模式">
+              </div>
+              <button type="button" id="workspace" class="quiet workspace" title="选择此对话的工作目录"><span class="ui-icon i-folder" aria-hidden="true"></span> <span id="workspaceLabel">工作目录</span></button>
+            </div>
+            <div id="attachmentLabel" class="reference-list" aria-label="已选择的引用" role="group" hidden></div>
+            <label class="sr-only" for="prompt">输入消息</label>
+            <textarea id="prompt" rows="1" maxlength="64000" aria-describedby="composerHint" placeholder="描述你想完成的任务…"></textarea>
+            <div class="composer-row">
+              <button type="button" id="composerToolsButton" class="icon-button" aria-label="附件与上下文" title="附件与上下文" popovertarget="composerTools"><span class="ui-icon i-plus" aria-hidden="true"></span></button>
+              <div id="composerTools" class="composer-tools" popover="auto" role="group" aria-label="附件与上下文">
+                <button type="button" id="attach"><span class="ui-icon i-attach" aria-hidden="true"></span>添加文本附件</button>
+                <button type="button" id="referenceFile" hidden><span class="ui-icon i-file" aria-hidden="true"></span>引用项目文件<kbd>@</kbd></button>
+                <button type="button" id="toggleSystem" aria-expanded="false" aria-controls="systemPanel"><span class="ui-icon i-sliders" aria-hidden="true"></span>系统提示词</button>
+              </div>
+              <button type="button" id="skillsButton" class="composer-tool" aria-label="选择技能" title="选择技能" aria-haspopup="dialog"><span class="ui-icon i-skill" aria-hidden="true"></span><span id="skillsButtonLabel">技能</span></button>
+              <button id="dictate" type="button" class="composer-tool" title="使用系统听写" aria-label="语音输入"><span class="ui-icon i-mic" aria-hidden="true"></span><span class="voice-label">听写</span></button>
+              <button id="speakReply" type="button" class="composer-tool" title="朗读随后收到的回复" aria-label="朗读回复" aria-pressed="false" hidden><span class="ui-icon i-volume" aria-hidden="true"></span></button>
+              <span class="composer-spacer"></span>
+              <label class="sr-only" for="modelSelect">当前模型配置</label>
+              <div class="model-picker" id="modelPicker">
+                <select id="modelSelect" hidden><option value="">正在加载模型…</option></select>
+                <button id="chooseModel" type="button" class="model-trigger" popovertarget="modelMenu" aria-label="切换模型" title="切换模型 (⌘/Ctrl + Shift + M)">
+                  <span class="model-dot" aria-hidden="true"></span><span id="modelName">选择模型</span><span class="ui-icon i-down" aria-hidden="true"></span>
+                </button>
+                <section id="modelMenu" class="model-menu" popover="auto" aria-label="切换模型">
+                  <label class="search-field"><span class="ui-icon i-search" aria-hidden="true"></span><input id="modelQuery" type="search" aria-label="搜索模型或连接" placeholder="搜索模型或连接" autocomplete="off"></label>
+                  <div id="modelResults" aria-label="可选模型"></div>
+                  <button type="button" id="useModelId" hidden></button>
+                  <p id="modelNotice" role="status" hidden></p>
+                  <div class="model-menu-footer">
+                    <button id="discoverModels" type="button"><span class="ui-icon i-refresh" aria-hidden="true"></span><span>更多模型</span></button>
+                    <button id="manageModels" type="button"><span class="ui-icon i-settings" aria-hidden="true"></span>管理连接</button>
+                  </div>
+                </section>
+              </div>
+              <button type="button" id="connectModel" class="primary model-connect" aria-haspopup="dialog" hidden><span class="ui-icon i-plus" aria-hidden="true"></span> 连接模型</button>
+              <button id="steerNow" type="button" title="中断当前模型生成并按补充要求继续，已开始的工具完成后接续" hidden>立即改向</button>
+              <button id="steer" class="secondary" type="submit" title="下一次模型请求会带上你的补充要求" hidden>发送补充</button>
+              <button type="button" id="stop" class="icon-button stop" title="停止生成" aria-label="停止生成" hidden><span class="ui-icon i-stop" aria-hidden="true"></span></button>
+              <button id="send" class="primary send" aria-label="发送消息" title="发送消息" type="submit" disabled><span class="ui-icon i-send" aria-hidden="true"></span></button>
+            </div>
+            <p id="dictationHint" role="status" hidden></p>
+          </form>
+          <div class="suggestions" role="group" aria-label="快速开始">
+            <button id="heroOpenFolder" type="button"><span class="ui-icon i-folder-open" aria-hidden="true"></span><span id="heroFolderLabel">打开文件夹</span></button>
+            <button type="button" data-mode="plan" data-prompt="请帮我制定一个可执行的计划。我的目标是："><span class="ui-icon i-task" aria-hidden="true"></span> 制定计划</button>
+            <button data-prompt="请阅读我附加的文本，提炼核心观点、关键细节和待确认的问题。"><span class="ui-icon i-file" aria-hidden="true"></span> 阅读资料</button>
+            <button data-task-only data-prompt="请先查看工作目录，介绍项目结构，并告诉我你能协助完成哪些任务。"><span class="ui-icon i-folder" aria-hidden="true"></span> 探索项目</button>
+          </div>
+          <p id="composerHint" class="sr-only">Enter 发送 · Shift + Enter 换行</p>
+        </div>
+      </div>
+      <section class="file-preview" id="filePreview" aria-labelledby="filePreviewName" hidden>
+        <div class="file-preview-header">
+          <button id="returnToChat" class="toolbar-action" type="button" title="返回对话" aria-label="返回对话"><span class="ui-icon i-back" aria-hidden="true"></span> 对话</button>
+          <div id="editorTabs" class="editor-tabs" role="group" aria-label="打开的文件"></div>
+          <button id="splitAgent" type="button" class="icon-button" title="并排显示 Agent" aria-label="并排显示 Agent" aria-pressed="false"><span class="ui-icon i-split" aria-hidden="true"></span></button>
+        </div>
+        <h2 id="filePreviewName" class="sr-only">开发工作台</h2>
+        <div id="filePreviewTools" class="file-preview-toolbar" hidden>
+          <p id="filePreviewPath"></p>
+          <button id="refreshPreview" type="button" class="icon-button" title="从磁盘重新加载" aria-label="从磁盘重新加载"><span class="ui-icon i-refresh" aria-hidden="true"></span></button>
+          <button id="wrapPreview" type="button" class="icon-button" title="自动换行" aria-label="自动换行" aria-pressed="false" hidden><span class="ui-icon i-wrap" aria-hidden="true"></span></button>
+          <button id="attachSelection" type="button" class="toolbar-action" title="引用已选代码行" aria-label="引用选区" hidden><span class="ui-icon i-code" aria-hidden="true"></span><span>引用选区</span></button>
+          <button id="attachPreview" aria-label="加入消息" type="button" class="toolbar-action" title="把当前文件加入消息" hidden><span class="ui-icon i-attach" aria-hidden="true"></span><span>加入消息</span></button>
+          <button id="codeComplete" type="button" class="quiet code-tool" title="按需补写 · Option + /" aria-label="补写代码" hidden><span class="ui-icon i-code" aria-hidden="true"></span><span>补写</span></button>
+          <button id="codeRewrite" type="button" class="quiet code-tool" title="改写选区 · ⌘I" aria-label="改写选区" hidden><span class="ui-icon i-edit" aria-hidden="true"></span><span>改写</span></button>
+          <button id="saveEditor" aria-label="保存文件" type="button" class="quiet editor-save" title="保存文件 · ⌘S" hidden disabled><span class="ui-icon i-save" aria-hidden="true"></span><span>保存</span></button>
+        </div>
+        <div id="editorEmpty" class="editor-empty" hidden>
+          <span class="ui-icon i-code" aria-hidden="true"></span>
+          <h3>打开文件开始编辑</h3>
+          <div><button id="findEditorFile" type="button" class="toolbar-action"><span class="ui-icon i-search" aria-hidden="true"></span>搜索文件 <kbd>⌘P</kbd></button><button id="createEditorFile" type="button" class="toolbar-action"><span class="ui-icon i-plus" aria-hidden="true"></span>新建文件</button></div>
+        </div>
+        <p id="previewStatus" class="preview-status" role="status" hidden></p>
+        <div id="filePreviewBody" class="file-preview-body" aria-label="文件正文" hidden><div id="fileLines" class="editor-host"></div></div>
+        <div id="codeAssistStrip" class="code-assist-strip" hidden><span id="codeAssistStatus" role="status"></span><span id="codeSuggestionText" class="sr-only"></span><button id="acceptCodeSuggestion" class="quiet" aria-describedby="codeSuggestionText" type="button" hidden>采纳</button><button id="dismissCodeAssist" class="quiet" type="button" hidden>忽略</button></div>
+        <footer id="editorFooter" class="editor-footer" hidden><button id="editorIssues" type="button" class="quiet" hidden></button><span id="editorPosition"></span><span id="editorEncoding">UTF-8</span><span id="filePreviewBytes"></span><span id="editorState"></span><button id="autoComplete" type="button" class="quiet editor-auto" aria-pressed="false" title="随键入补写 · 启用后，本次打开应用期间，向当前所选模型发送光标附近的代码" hidden>自动补写</button></footer>
+      </section>
+      <button id="taskPaneBackdrop" class="inspector-backdrop" type="button" aria-label="关闭检查器" tabindex="-1" hidden></button>
+      <aside id="taskPane" class="task-pane" hidden aria-labelledby="taskPaneTitle">
+        <div class="task-pane-header">
+          <h2 id="taskPaneTitle">任务详情</h2>
+          <div class="pane-actions">
+            <div class="pane-switch" role="group" aria-label="检查器视图">
+              <button id="inspectorFiles" type="button" aria-pressed="false" aria-controls="fileBrowser"><span class="ui-icon i-folder" aria-hidden="true"></span>文件</button>
+              <button id="inspectorGit" type="button" aria-pressed="false" aria-controls="gitBrowser"><span class="ui-icon i-git" aria-hidden="true"></span>Git</button>
+              <button id="inspectorTask" type="button" aria-pressed="true" aria-controls="taskSections"><span class="ui-icon i-task" aria-hidden="true"></span>任务</button>
+            </div>
+            <button id="closeTaskPane" class="icon-button" aria-label="关闭检查器" title="关闭检查器"><span class="ui-icon i-close" aria-hidden="true"></span></button>
+          </div>
+        </div>
+        <div id="fileBrowser" class="file-browser" hidden>
+          <div class="file-browser-root"><span class="ui-icon i-folder-open" aria-hidden="true"></span><strong id="fileRootLabel"></strong><button id="newWorkspaceFile" type="button" class="icon-button" aria-label="新建文件" title="新建文件" aria-haspopup="dialog"><span class="ui-icon i-plus" aria-hidden="true"></span></button><button id="refreshFiles" type="button" class="icon-button" aria-label="刷新文件列表" title="刷新文件列表"><span class="ui-icon i-refresh" aria-hidden="true"></span></button></div>
+          <div class="file-browser-location" id="fileLocation" hidden><button id="fileParent" type="button" class="icon-button" aria-label="返回上一级目录" title="返回上一级目录"><span class="ui-icon i-back" aria-hidden="true"></span></button><span id="fileLocationPath"></span></div>
+          <label class="file-filter"><span class="ui-icon i-search" aria-hidden="true"></span><span class="sr-only">筛选当前目录中的文件</span><input id="fileFilter" type="search" placeholder="筛选当前目录" autocomplete="off" spellcheck="false" maxlength="255" aria-controls="fileEntries"></label>
+          <p id="fileListStatus" class="file-list-status muted" role="status"></p>
+          <div id="fileEntries" class="file-entries" aria-label="目录内容" role="group"></div>
+        </div>
+        <div id="gitBrowser" class="git-browser" hidden>
+          <div class="file-browser-root"><span class="ui-icon i-git" aria-hidden="true"></span><strong id="gitBranch">Git 改动</strong><button id="openGitBranches" type="button" class="icon-button" aria-label="管理 Git 分支" title="管理 Git 分支" aria-haspopup="dialog" hidden><span class="ui-icon i-chevron" aria-hidden="true"></span></button><button id="refreshGit" type="button" class="icon-button" aria-label="刷新 Git 改动" title="刷新 Git 改动"><span class="ui-icon i-refresh" aria-hidden="true"></span></button></div>
+          <p id="gitStatus" class="file-list-status muted" role="status"></p>
+          <button id="openGitCommit" class="toolbar-action git-commit-trigger" type="button" aria-haspopup="dialog" hidden><span class="ui-icon i-check" aria-hidden="true"></span>提交暂存改动</button>
+          <div id="gitEntries" class="git-entries"></div>
+        </div>
+        <div id="taskSections" class="task-sections">
+          <section id="taskPlan" hidden aria-labelledby="taskTitle">
+            <div class="task-heading"><h3 id="taskTitle">任务清单</h3><span id="taskProgress" role="status"></span></div>
+            <progress id="taskMeter" aria-label="任务进度" max="1" value="0"></progress>
+            <ol id="taskSteps"></ol>
+          </section>
+          <section id="draftPanel" hidden aria-labelledby="draftTitle">
+            <div class="task-heading"><h3 id="draftTitle">交付物</h3><small id="draftCount"></small></div>
+            <div id="draftList" class="draft-list"></div>
+          </section>
+          <section id="changesPanel" hidden aria-labelledby="changesTitle">
+            <div class="task-heading"><h3 id="changesTitle">文件改动</h3><small id="changesCount"></small></div>
+            <ul id="changesList" class="changes-list"></ul>
+          </section>
+          <section id="activityPanel" hidden aria-labelledby="activityTitle">
+            <div class="task-heading"><h3 id="activityTitle">运行活动</h3><small id="activityCount"></small></div>
+            <ol id="activityLog" class="run-timeline" role="log" aria-live="polite"></ol>
+          </section>
+        </div>
+      </aside>
+    </div>
+    <section id="terminalPanel" class="terminal-panel" aria-labelledby="terminalTitle" hidden>
+      <header class="terminal-header">
+        <h2 id="terminalTitle">终端</h2><span id="terminalLocation"></span><span class="composer-spacer"></span>
+        <button id="startTerminal" class="quiet" type="button">启动终端</button>
+        <button id="stopTerminal" class="icon-button" type="button" title="结束终端会话" aria-label="结束终端会话" hidden><span class="ui-icon i-trash" aria-hidden="true"></span></button>
+        <button id="hideTerminal" class="icon-button" type="button" title="收起终端" aria-label="收起终端"><span class="ui-icon i-close" aria-hidden="true"></span></button>
+      </header>
+      <p id="terminalMessage" class="muted" role="status"></p>
+      <div id="terminalScreens" class="terminal-screens"></div>
+    </section>
   </main>
-  <dialog id="settingsDialog" aria-labelledby="settingsTitle"><div class="dialog-header"><div><span class="eyebrow">MAKE IT YOURS</span><h2 id="settingsTitle">设置你的工作空间</h2></div><button id="closeSettings" class="icon-button" aria-label="关闭设置">×</button></div><div class="tabs" role="tablist" aria-label="设置分类"><button id="providerTab" role="tab" aria-selected="true" aria-controls="providerPanel">模型配置</button><button id="mcpTab" role="tab" aria-selected="false" aria-controls="mcpPanel" tabindex="-1">MCP 与运行</button></div>
-    <section id="providerPanel" role="tabpanel" aria-labelledby="providerTab"><div class="provider-layout"><aside class="provider-sidebar"><div class="section-label">已连接的模型</div><div id="providerList"></div><button id="addProvider" class="quiet add-provider">＋ 新增模型配置</button></aside><form id="providerForm"><h3 id="providerFormTitle">新增模型配置</h3><p class="muted">连接你喜欢的模型，开始协作。</p><fieldset id="providerFields"><label>快速填充服务<select id="providerPreset"><option value="">自定义配置</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="deepseek">DeepSeek</option><option value="gemini">Gemini（兼容接口）</option><option value="qwen">通义千问（兼容接口）</option><option value="ollama">Ollama 本地</option></select></label><label>配置名称<input name="name" placeholder="例如：日常助手" required maxlength="100"></label><div class="form-grid"><label>服务类型<select name="kind"><option value="openai-compatible">OpenAI Compatible</option><option value="anthropic">Anthropic</option><option value="ollama">Ollama</option></select></label><label>模型 ID<input name="model" list="availableModels" placeholder="例如：deepseek-chat" required><datalist id="availableModels"></datalist></label></div><label>Base URL<input name="baseUrl" placeholder="留空使用服务默认地址" type="url"></label><label>API Key<input name="apiKey" type="password" autocomplete="new-password" placeholder="留空保留已保存的 Key"></label><div class="checkbox-row"><label><input name="stream" type="checkbox" checked> 启用流式输出</label><label><input name="clearKey" type="checkbox"> 清除已保存的 Key</label></div><p id="keyStatus" class="muted"></p><div class="provider-tools"><button id="fetchModels" type="button" class="quiet">获取模型列表</button><button id="testProvider" type="button" class="quiet">测试连接</button><button id="deleteProvider" type="button" class="quiet danger">删除配置</button></div><div class="dialog-actions"><button class="primary" type="submit">保存配置</button></div></fieldset></form></div></section>
-    <section id="mcpPanel" role="tabpanel" aria-labelledby="mcpTab" hidden><form id="mcpForm"><h3>工具，让想法走得更远</h3><p class="muted">输入 MCP 服务器数组（JSON）。工具调用的确认由桌面应用处理。</p><details class="mcp-help"><summary>查看配置格式</summary><p>每项需要 name、transport；只有 enabled: true 才会启用。stdio 使用 command、args、env，http 使用 url、headers。</p><pre>[
+  <dialog id="projectSearchDialog" class="search-dialog project-search-dialog" aria-labelledby="projectSearchTitle">
+    <div class="dialog-header"><h2 id="projectSearchTitle">搜索项目</h2><button id="closeProjectSearch" class="icon-button" aria-label="关闭项目搜索"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+    <div class="project-search-controls">
+      <div class="search-field"><span class="ui-icon i-search" aria-hidden="true"></span><input type="search" id="projectQuery" maxlength="200" aria-label="项目搜索关键词" placeholder="搜索代码或文本" autocomplete="off" spellcheck="false" autofocus></div>
+      <div class="pane-switch" role="group" aria-label="项目搜索范围"><button type="button" id="searchContent" aria-pressed="true">内容</button><button type="button" id="searchFiles" aria-pressed="false">文件名</button></div>
+    </div>
+    <p id="projectSearchStatus" class="muted project-search-status" role="status"></p>
+    <div id="projectSearchResults" class="search-results project-search-results" aria-label="项目搜索结果"></div>
+  </dialog>
+  <dialog id="gitDialog" class="change-review-dialog git-dialog" aria-labelledby="gitReviewTitle">
+    <div class="dialog-header review-header"><span class="review-file-icon"><span class="ui-icon i-git" aria-hidden="true"></span></span><div><h2 id="gitReviewTitle">Git 差异</h2><p id="gitReviewPath"></p></div><button id="closeGitDialog" class="icon-button" aria-label="关闭 Git 差异"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+    <div id="gitDiffBody" class="change-review-body git-diff-body" tabindex="0" aria-label="Git 逐行差异"></div>
+    <div class="change-review-footer"><p id="gitDiffStatus" class="muted" role="status"></p><button type="button" id="gitOpenFile" class="quiet">打开当前文件</button><button type="button" id="gitReviewAgent" class="quiet" title="将差异加入计划模式，发送后进行只读审查" hidden>交给 Agent 审查</button><button type="button" id="gitIndexAction" class="primary" hidden></button></div>
+  </dialog>
+  <dialog id="gitBranchDialog" class="small-dialog" aria-labelledby="gitBranchTitle">
+    <div class="dialog-header"><h2 id="gitBranchTitle">本地 Git 分支</h2><button id="closeGitBranch" type="button" class="icon-button" aria-label="关闭分支管理"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+    <div class="git-branch-content">
+      <p id="gitBranchCurrent" class="muted"></p>
+      <form id="gitSwitchForm" class="git-branch-form">
+        <label for="gitBranchSelect">切换到现有分支</label>
+        <select id="gitBranchSelect" required></select><button id="gitSwitchNow" class="quiet" type="submit">切换</button>
+      </form>
+      <form id="gitBranchCreateForm" class="git-branch-form">
+        <label for="gitBranchName">从当前提交新建分支</label>
+        <input id="gitBranchName" type="text" maxlength="240" placeholder="例如 feature/checkout" spellcheck="false" autocomplete="off" required>
+        <button id="gitCreateBranch" type="submit" class="primary">新建并切换</button>
+      </form>
+      <p id="gitBranchStatus" class="muted" role="status" aria-live="polite"></p>
+    </div>
+  </dialog>
+  <dialog id="gitCommitDialog" class="change-review-dialog git-dialog git-commit-dialog" aria-labelledby="gitCommitTitle">
+    <form id="gitCommitForm">
+      <div class="dialog-header review-header"><span class="review-file-icon"><span class="ui-icon i-git" aria-hidden="true"></span></span><div><h2 id="gitCommitTitle">提交暂存改动</h2><p id="gitCommitBranch" class="muted"></p></div><button type="button" id="closeGitCommit" class="icon-button" aria-label="关闭提交预览"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+      <div class="git-commit-message"><label for="gitCommitMessage">提交说明</label><textarea id="gitCommitMessage" rows="2" maxlength="2000" required placeholder="描述这次提交的内容"></textarea></div>
+      <div id="gitCommitPatch" class="change-review-body git-diff-body" tabindex="0" aria-label="暂存区逐行差异"></div>
+      <div class="change-review-footer"><p id="gitCommitStatus" class="muted" role="status"></p><button type="button" id="reloadGitCommit" class="quiet" hidden>重新读取</button><button type="button" id="reviewGitCommit" class="quiet" title="将暂存区差异加入只读计划" hidden>交给 Agent 审查</button><button type="submit" id="gitCommitNow" class="primary" disabled>创建本地提交</button></div>
+    </form>
+  </dialog>
+  <dialog id="codeEditDialog" class="code-edit-dialog" aria-labelledby="codeEditTitle">
+    <form id="codeEditForm">
+      <div class="dialog-header"><div><h2 id="codeEditTitle">改写选区</h2><p id="codeEditPath" class="muted"></p></div><button id="closeCodeEdit" type="button" class="icon-button" aria-label="关闭改写"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+      <div class="code-edit-body">
+        <label for="codeInstruction">改写要求</label>
+        <textarea id="codeInstruction" required rows="3" maxlength="1200" placeholder="例如，处理空值并提取公共逻辑"></textarea>
+        <div id="codeEditCompare" class="code-edit-compare" hidden>
+          <section><h3>原选区</h3><pre id="codeEditBefore" tabindex="0"></pre></section>
+          <section><h3>建议代码</h3><pre id="codeEditAfter" tabindex="0"></pre></section>
+        </div>
+      </div>
+      <div class="dialog-actions code-edit-actions"><p id="codeEditStatus" role="status"></p><button id="submitCodeEdit" class="primary" type="submit">生成建议</button><button id="applyCodeEdit" class="primary" type="button" hidden>应用到编辑器</button></div>
+    </form>
+  </dialog>
+  <dialog id="projectPreviewDialog" class="small-dialog" aria-labelledby="projectPreviewTitle">
+    <form id="projectPreviewForm" class="editor-discard-content">
+      <h2 id="projectPreviewTitle">预览本地网页</h2>
+      <label for="projectPreviewUrl">开发服务器地址</label>
+      <input id="projectPreviewUrl" type="url" maxlength="2048" placeholder="http://localhost:5173" spellcheck="false" autocomplete="off" required>
+      <p id="projectPreviewStatus" class="muted" role="status">请先在项目终端启动开发服务器。</p>
+      <div class="dialog-actions"><button id="cancelProjectPreview" type="button" class="quiet">取消</button><button id="startProjectPreview" type="submit" class="primary">打开预览</button></div>
+    </form>
+  </dialog>
+  <dialog id="newWorkspaceFileDialog" class="small-dialog" aria-labelledby="newWorkspaceFileTitle">
+    <form id="newWorkspaceFileForm" class="editor-discard-content">
+      <h2 id="newWorkspaceFileTitle">新建文件</h2>
+      <label for="newWorkspaceFilePath">项目相对路径</label>
+      <input id="newWorkspaceFilePath" type="text" maxlength="1024" placeholder="例如 src/example.js" spellcheck="false" autocomplete="off" required>
+      <p id="newWorkspaceFileStatus" class="muted" role="status"></p>
+      <div class="dialog-actions"><button id="cancelWorkspaceFile" type="button" class="quiet">取消</button><button id="createWorkspaceFileNow" type="submit" class="primary">创建文件</button></div>
+    </form>
+  </dialog>
+  <dialog id="editorDiscard" class="small-dialog" aria-labelledby="editorDiscardTitle">
+    <div class="editor-discard-content"><h2 id="editorDiscardTitle">放弃未保存的修改？</h2><p class="muted" id="editorDiscardFile"></p><div class="dialog-actions"><button id="cancelEditorDiscard" type="button" class="quiet" autofocus>继续编辑</button><button id="confirmEditorDiscard" type="button" class="danger quiet">放弃修改</button></div></div>
+  </dialog>
+  <dialog id="changeReviewDialog" class="change-review-dialog" aria-labelledby="changeReviewTitle">
+    <div class="dialog-header">
+      <div class="review-heading"><span class="review-file-icon"><span class="ui-icon i-compare" aria-hidden="true"></span></span><div><h2 id="changeReviewTitle">审阅文件改动</h2><p id="changeReviewPath"></p></div></div>
+      <button id="closeChangeReview" type="button" class="icon-button" aria-label="关闭改动预览" title="关闭改动预览"><span class="ui-icon i-close" aria-hidden="true"></span></button>
+    </div>
+    <div class="change-review-toolbar">
+      <div class="review-mode" role="group" aria-label="审阅视图">
+        <button type="button" id="reviewDiff" aria-pressed="true">差异</button><button type="button" id="reviewBefore" aria-pressed="false">原文件</button><button type="button" id="reviewAfter" aria-pressed="false">拟写内容</button>
+      </div>
+      <span id="reviewCounts" class="change-counts"></span>
+    </div>
+    <div id="changeReviewBody" class="change-review-body" tabindex="0" aria-label="文件改动内容"></div>
+    <div class="change-review-footer">
+      <span id="reviewStatus" role="status"></span><span id="reviewDate" class="muted" hidden></span>
+      <button id="openCurrentFile" type="button" class="quiet" hidden>查看当前文件</button>
+      <button id="restoreFilePreview" type="button" class="quiet" hidden>恢复原文…</button>
+      <button id="cancelFileRestore" type="button" class="quiet" hidden>返回记录</button><button id="applyFileRestore" type="button" class="primary" hidden>确认恢复</button>
+      <button id="rejectReviewedWrite" type="button" class="quiet">拒绝</button><button id="applyReviewedWrite" type="button" class="primary">应用改动</button>
+    </div>
+  </dialog>
+  <dialog id="skillsDialog" class="library-dialog" aria-labelledby="skillsTitle">
+    <div class="dialog-header"><h2 id="skillsTitle">技能库</h2><button id="closeSkills" class="icon-button" type="button" aria-label="关闭技能库"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+    <div class="library-layout">
+      <div class="library-sidebar">
+        <nav id="skillList" aria-label="可用技能"></nav>
+        <button id="importSkill" type="button" class="quiet"><span class="ui-icon i-plus" aria-hidden="true"></span> 导入 SKILL.md</button>
+      </div>
+      <div class="library-details">
+        <form id="skillForm">
+          <label for="skillName">名称</label><input id="skillName" required maxlength="80">
+          <label for="skillDescription">简介</label><textarea id="skillDescription" rows="2" required maxlength="1024"></textarea>
+          <label for="skillBody">技能说明</label><textarea id="skillBody" rows="8" required maxlength="16000"></textarea>
+        </form>
+        <p class="muted library-note">选中后，技能说明会随此任务发送给模型。导入范围为 Markdown 文本。</p>
+      </div>
+    </div>
+    <div class="library-footer"><p id="skillStatus" class="muted" role="status"></p><button id="removeSkill" type="button" class="danger quiet" hidden>移除</button><button id="saveSkill" type="submit" form="skillForm" class="quiet" hidden>保存技能</button><button id="toggleSkill" type="button" class="primary" disabled>用于此任务</button></div>
+  </dialog>
+  <dialog id="schedulesDialog" class="library-dialog schedules-dialog" aria-labelledby="schedulesTitle">
+    <div class="dialog-header"><h2 id="schedulesTitle">计划任务</h2><button id="closeSchedules" type="button" class="icon-button" aria-label="关闭计划任务"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+    <div class="library-layout">
+      <div class="library-sidebar">
+        <nav id="scheduleList" aria-label="已保存的计划任务"></nav>
+        <button id="newSchedule" type="button" class="quiet"><span class="ui-icon i-plus" aria-hidden="true"></span> 新建计划</button>
+      </div>
+      <div class="library-details">
+        <div id="scheduleResult" class="schedule-result" hidden>
+          <span class="ui-icon i-history" aria-hidden="true"></span><span id="scheduleLast" role="status"></span>
+          <button id="openScheduleResult" class="quiet" type="button" hidden>查看运行</button>
+        </div>
+        <div class="schedule-form-scroll">
+          <form id="scheduleForm">
+            <label for="scheduleName">名称</label><input id="scheduleName" maxlength="80" required placeholder="例如：每周项目简报">
+            <label for="schedulePrompt">任务说明</label><textarea id="schedulePrompt" rows="3" maxlength="16000" required placeholder="写下每次运行需要交付的结果"></textarea>
+            <div class="schedule-grid">
+              <label>模型<select id="scheduleProvider" required></select></label>
+              <label>项目<select id="scheduleProject"></select></label>
+              <div class="schedule-recurrence">
+                <label>重复周期<select id="scheduleFrequency"><option value="daily">每天</option><option value="weekly">每周</option></select></label>
+                <label id="scheduleWeekdayLabel" hidden>星期<select id="scheduleWeekday"><option value="1">星期一</option><option value="2">星期二</option><option value="3">星期三</option><option value="4">星期四</option><option value="5">星期五</option><option value="6">星期六</option><option value="0">星期日</option></select></label>
+                <label>本地时间<input id="scheduleTime" type="time" value="09:00" required></label>
+              </div>
+            </div>
+            <label class="schedule-toggle"><input id="scheduleEnabled" type="checkbox"> 启用定时运行</label>
+          </form>
+          <p id="scheduleScope" class="library-note muted"></p>
+        </div>
+      </div>
+    </div>
+    <div class="library-footer"><p id="scheduleStatus" class="muted" role="status"></p><button id="removeSchedule" type="button" class="danger quiet" hidden>删除</button><button id="runSchedule" type="button" class="quiet" hidden>立即运行</button><button id="saveSchedule" type="submit" form="scheduleForm" class="primary">保存计划</button></div>
+  </dialog>
+  <dialog id="projectDialog" class="small-dialog project-dialog" aria-labelledby="projectTitle">
+    <div class="dialog-header"><h2 id="projectTitle">新建项目</h2><button id="closeProject" class="icon-button" aria-label="关闭项目设置"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+    <form id="projectForm">
+      <label for="projectName">项目名称</label>
+      <input id="projectName" maxlength="80" required>
+      <label for="projectInstructions">共享说明</label>
+      <textarea id="projectInstructions" rows="6" maxlength="12000" placeholder="例如：所有报告使用中文，并列出引用的来源。"></textarea>
+      <p class="muted">共享说明会随项目内的请求发给所选模型。</p>
+      <div id="projectDirectory" hidden>
+        <span id="projectPath"></span>
+        <div><button type="button" id="chooseProjectWorkspace" class="quiet">选择工作目录</button><button type="button" id="clearProjectWorkspace" class="quiet">移除目录</button></div>
+      </div>
+      <section id="projectSources" hidden aria-labelledby="projectSourcesTitle">
+        <div class="project-sources-heading"><h3 id="projectSourcesTitle">项目资料</h3><button id="addProjectSource" type="button" class="quiet">添加文本</button></div>
+        <p class="muted">资料副本保存在本机。模型调用读取工具时，正文会发给所选模型服务。</p>
+        <p id="projectSourceEmpty" class="muted">还没有添加资料</p>
+        <ul id="projectSourceList"></ul>
+      </section>
+      <p id="projectStatus" role="status" class="muted"></p>
+      <div class="dialog-actions"><button class="primary" type="submit">保存项目</button></div>
+    </form>
+  </dialog>
+  <dialog id="moveDialog" class="small-dialog" aria-labelledby="moveTitle">
+    <form id="moveForm">
+      <h2 id="moveTitle">移动会话</h2>
+      <label for="moveTarget">目标项目</label>
+      <select id="moveTarget"></select>
+      <div class="dialog-actions"><button type="button" id="cancelMove" class="quiet">取消</button><button class="primary" type="submit">移动会话</button></div>
+    </form>
+  </dialog>
+  <dialog id="searchDialog" class="search-dialog" aria-labelledby="searchTitle">
+    <div class="navigator-head"><h2 id="searchTitle">会话导航</h2><button id="closeSearch" class="icon-button" type="button" aria-label="关闭会话导航"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+    <div class="navigator-query"><span class="ui-icon i-search" aria-hidden="true"></span><input type="search" id="historyQuery" aria-label="搜索会话标题、正文或项目" placeholder="搜索标题、消息或项目…" autocomplete="off" spellcheck="false" maxlength="240" autofocus></div>
+    <div id="historyFilters" role="group" aria-label="筛选会话">
+      <button data-scope="all" type="button">全部 <small></small></button><button data-scope="attention" type="button">待处理 <small></small></button><button data-scope="running" type="button">运行中 <small></small></button><button data-scope="pinned" type="button">已置顶 <small></small></button>
+    </div>
+    <div id="historyResults" aria-label="会话结果" role="group"></div>
+    <div id="historyEmpty" hidden><span class="ui-icon i-search" aria-hidden="true"></span><strong id="historyEmptyTitle"></strong><button type="button" id="historyReset">查看全部会话</button></div>
+    <button type="button" id="historyMore" hidden>显示更多会话</button>
+    <footer class="navigator-footer"><span id="historyStatus" role="status"></span><span aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> 选择　<kbd>↵</kbd> 打开　<kbd>esc</kbd> 关闭</span></footer>
+  </dialog>
+  <dialog id="settingsDialog" aria-labelledby="settingsTitle">
+    <div class="dialog-header">
+      <h2 id="settingsTitle">设置</h2>
+      <button id="closeSettings" class="icon-button" aria-label="关闭设置"><span class="ui-icon i-close" aria-hidden="true"></span></button>
+    </div>
+    <div class="tabs" role="tablist" aria-label="设置分类">
+      <button id="generalTab" role="tab" aria-selected="false" aria-controls="generalPanel" tabindex="-1"><span class="ui-icon i-sliders" aria-hidden="true"></span> 通用</button>
+      <button id="providerTab" role="tab" aria-selected="true" aria-controls="providerPanel"><span class="ui-icon i-chat" aria-hidden="true"></span> 模型配置</button>
+      <button id="mcpTab" role="tab" aria-selected="false" aria-controls="mcpPanel" tabindex="-1"><span class="ui-icon i-task" aria-hidden="true"></span> MCP 与运行</button>
+    </div>
+    <div id="settingsBody" class="settings-body">
+      <section id="generalPanel" role="tabpanel" aria-labelledby="generalTab" hidden>
+        <h3>外观与阅读</h3>
+        <div class="preference-group">
+          <fieldset id="appearance" class="appearance-choices">
+            <legend class="sr-only">窗口外观</legend>
+            <label><input type="radio" name="appearance" value="system"><span class="theme-swatch auto" aria-hidden="true"></span><span>跟随系统</span></label>
+            <label><input type="radio" name="appearance" value="light"><span class="theme-swatch light" aria-hidden="true"></span><span>浅色</span></label>
+            <label><input type="radio" name="appearance" value="dark"><span class="theme-swatch dark" aria-hidden="true"></span><span>深色</span></label>
+          </fieldset>
+          <label>对话背景<select id="conversationScene"><option value="silk">丝结夜景</option><option value="workspace">跟随窗口外观</option></select></label>
+          <label>回复字体<select id="readingFont"><option value="serif">书籍衬线</option><option value="system">系统无衬线</option></select></label>
+          <label>回复字号<select id="textSize"><option value="small">小</option><option value="">模型默认</option><option value="standard">标准</option><option value="large">大</option></select></label>
+        </div>
+        <h3>新会话与输入</h3>
+        <div class="preference-group">
+          <label>新会话默认模型<select id="defaultModel"></select></label>
+          <label>发送消息<select id="sendKey"><option value="enter">Enter 发送</option><option value="modifier">⌘ / Ctrl + Enter 发送</option></select></label>
+        </div>
+      </section>
+      <section id="providerPanel" role="tabpanel" aria-labelledby="providerTab">
+        <div class="provider-layout">
+          <aside class="provider-sidebar">
+            <div class="section-label">已保存的模型</div>
+            <div id="providerList"></div>
+            <button id="addProvider" class="quiet add-provider"><span class="ui-icon i-plus" aria-hidden="true"></span> 新增模型配置</button>
+          </aside>
+          <form id="providerForm">
+            <h3 id="providerFormTitle">新增模型配置</h3>
+            <fieldset id="providerFields">
+              <div class="form-grid">
+                <label>服务预设
+                  <select id="providerPreset">
+                    <option value="">自定义配置</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="gemini">Gemini（兼容接口）</option>
+                    <option value="qwen">通义千问（兼容接口）</option>
+                    <option value="ollama">Ollama 本地</option>
+                  </select>
+                </label>
+                <label>配置名称<input name="name" placeholder="例如：日常助手" required maxlength="100"></label>
+                <label>服务类型
+                  <select name="kind">
+                    <option value="openai-compatible">OpenAI Compatible</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="ollama">Ollama</option>
+                  </select>
+                </label>
+                <label>模型 ID<input name="model" list="availableModels" placeholder="填写服务商提供的 ID" required><datalist id="availableModels"></datalist></label>
+              </div>
+              <label>Base URL<input name="baseUrl" placeholder="留空使用服务默认地址" type="url"></label>
+              <label>API Key<input name="apiKey" type="password" autocomplete="new-password" placeholder="留空保留已保存的 Key" aria-describedby="keyStatus"></label>
+              <div class="checkbox-row">
+                <label><input name="stream" type="checkbox" checked> 启用流式输出</label>
+                <label><input name="clearKey" type="checkbox"> 清除已保存的 Key</label>
+              </div>
+              <p id="keyStatus" class="muted"></p>
+              <div class="provider-tools">
+                <button id="fetchModels" type="button" class="quiet">获取模型列表</button>
+                <button id="testProvider" type="button" class="quiet">测试连接</button>
+                <button id="deleteProvider" type="button" class="quiet danger">删除配置</button>
+              </div>
+            </fieldset>
+          </form>
+        </div>
+      </section>
+      <section id="mcpPanel" role="tabpanel" aria-labelledby="mcpTab" hidden>
+        <form id="mcpForm">
+          <h3>MCP 服务器与 Agent 步数</h3>
+          <p class="muted">输入 MCP 服务器数组（JSON）。工具调用的确认由桌面应用处理。</p>
+          <details class="mcp-help">
+            <summary>查看配置格式</summary>
+            <p>每项需要 name、transport；只有 enabled: true 才会启用。stdio 使用 command、args、env，http 使用 url、headers。</p>
+            <pre>[
   {"name":"Browser","transport":"stdio","command":"npx","args":["-y","@playwright/mcp@latest"],"env":{},"enabled":false},
   {"name":"Remote tools","transport":"http","url":"https://example.com/mcp","headers":{},"enabled":false}
-]</pre></details><fieldset id="mcpFields"><label for="mcpServers">MCP 服务器配置</label><textarea id="mcpServers" class="code-input" rows="10" spellcheck="false" placeholder="[]"></textarea><label class="steps-label" for="maxSteps">Agent 最大执行步数<input id="maxSteps" type="number" min="1" max="30" step="1" value="12" required></label><div class="dialog-actions"><button class="primary" type="submit">保存运行设置</button></div></fieldset></form></section><p id="settingsStatus" class="settings-status" role="status" aria-live="polite"></p>
+]</pre>
+          </details>
+          <fieldset id="mcpFields">
+            <label for="mcpServers">MCP 服务器配置</label>
+            <textarea id="mcpServers" class="code-input" rows="10" spellcheck="false" placeholder="[]"></textarea>
+            <label class="steps-label" for="maxSteps">Agent 最大执行步数<input id="maxSteps" type="number" min="1" max="30" step="1" value="12" required></label>
+          </fieldset>
+        </form>
+      </section>
+    </div>
+    <div class="settings-footer">
+      <p id="settingsStatus" class="settings-status" role="status" aria-live="polite"></p>
+      <button id="providerSubmit" class="primary" type="submit" form="providerForm">保存配置</button>
+      <button id="mcpSubmit" class="primary" type="submit" form="mcpForm" hidden>保存运行设置</button>
+    </div>
+  </dialog>
+  <div id="sessionMenu" popover="auto" role="menu" aria-labelledby="sessionMenuName">
+    <div id="sessionMenuName"></div>
+    <button id="renameConversation" role="menuitem"><span class="ui-icon i-edit"></span>重命名</button>
+    <button id="forkConversation" role="menuitem"><span class="ui-icon i-git"></span>创建分支</button>
+    <button id="pinConversation" role="menuitem"><span class="ui-icon i-pin"></span><span id="pinLabel">置顶会话</span></button>
+    <button id="moveConversation" role="menuitem"><span class="ui-icon i-folder"></span>移动到项目</button>
+    <button id="exportConversation" role="menuitem"><span class="ui-icon i-download"></span>导出 Markdown</button>
+    <button id="deleteConversation" role="menuitem" class="danger"><span class="ui-icon i-trash"></span>删除会话</button>
+  </div>
+  <dialog id="deleteDialog" class="small-dialog" aria-labelledby="deleteHeading">
+    <h2 id="deleteHeading">删除会话？</h2><p id="deleteDetail"></p>
+    <div class="dialog-actions"><button type="button" id="cancelDelete" class="quiet" autofocus>取消</button><button type="button" id="confirmDelete" class="destructive">删除会话</button></div>
+  </dialog>
+  <dialog id="reviseDialog" class="small-dialog" aria-labelledby="reviseTitle">
+    <form id="reviseForm">
+      <h2 id="reviseTitle">编辑提问</h2>
+      <label for="reviseText">提问内容</label><textarea id="reviseText" maxlength="64000" rows="5" required></textarea>
+      <p id="reviseHint" class="muted"></p>
+      <div id="reviseFiles" hidden><p id="reviseReferences"></p><button id="reviseAttach" type="button" class="quiet">重新选择文件</button></div>
+      <div class="dialog-actions"><button id="cancelRevise" type="button" class="quiet">取消</button><button id="sendRevision" type="submit" class="primary">发送新版本</button></div>
+    </form>
   </dialog>
   <dialog id="renameDialog" class="small-dialog" aria-labelledby="renameTitle"><form id="renameForm"><h2 id="renameTitle">重命名对话</h2><label for="renameInput">对话名称</label><input id="renameInput" maxlength="200" required><div class="dialog-actions"><button id="cancelRename" type="button" class="quiet">取消</button><button type="submit" class="primary">保存名称</button></div></form></dialog>
+  <dialog id="draftDialog" aria-labelledby="draftName">
+    <div class="dialog-header"><div><p id="draftRevision" class="draft-metadata"></p><h2 id="draftName"></h2></div><button id="closeDraft" class="icon-button" aria-label="关闭交付稿"><span class="ui-icon i-close" aria-hidden="true"></span></button></div>
+    <article id="renderedDraft" class="markdown draft-document" aria-label="交付稿排版预览" tabindex="0"></article>
+    <textarea hidden id="draftPreview" readonly aria-label="Markdown 交付稿正文" rows="15"></textarea>
+    <p id="draftStatus" role="status" class="muted"></p>
+    <div class="dialog-actions"><button id="toggleDraftSource" class="quiet" type="button" aria-pressed="false">查看源码</button><button id="exportDraft" class="quiet" type="button">导出 Markdown</button><button id="exportDraftDocx" class="quiet" type="button">导出 Word</button><button id="exportDraftPdf" class="primary" type="button">导出 PDF</button></div>
+  </dialog>
+  <dialog id="mediaLab" class="media-lab" aria-labelledby="mediaLabTitle">
+    <div class="dialog-header media-lab-header">
+      <div class="media-heading"><span class="media-mark"><span class="ui-icon i-media" aria-hidden="true"></span></span><div><h2 id="mediaLabTitle">视觉实验室</h2><p>选取画面，检查模型能否看懂细节。</p></div></div>
+      <button id="closeMediaLab" class="icon-button" type="button" aria-label="关闭视觉实验室"><span class="ui-icon i-close" aria-hidden="true"></span></button>
+    </div>
+    <div class="media-lab-layout">
+      <section class="media-source">
+        <div class="media-source-toolbar"><div><h3>测试素材</h3><p>PNG、JPG、WebP · MP4、MOV、WebM</p></div><label class="media-file-button quiet">选择文件<input id="mediaFile" type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm,.mov,.mp4,.webm"></label></div>
+        <div id="mediaDrop" class="media-drop" tabindex="0" role="button" aria-label="选择或拖入图片、视频"><span class="media-drop-icon"><span class="ui-icon i-media" aria-hidden="true"></span></span><strong>拖入图片或视频</strong><span>也可以点击选择 · 图片最大 24 MiB · 视频最大 80 MiB</span></div>
+        <div id="mediaPreview" class="media-preview" hidden></div>
+        <p class="media-note">视频仅抽取 6 张画面，不包含音频。较长视频按全片均匀取样。</p>
+      </section>
+      <section class="media-prompt">
+        <label for="mediaModel">视觉模型</label><select id="mediaModel"></select>
+        <label for="mediaQuestion">你想检查什么？</label><textarea id="mediaQuestion" rows="4" placeholder="例如：读出截图中的错误信息，指出最可能的原因。" maxlength="8000"></textarea>
+        <div id="mediaResult" class="media-result" role="status" aria-live="polite"><span>模型的回复会显示在这里。</span></div>
+        <p id="mediaStatus" class="media-status" role="status"></p>
+        <div class="dialog-actions media-actions"><button id="cancelMedia" class="quiet danger" type="button" hidden>停止生成</button><button id="continueWithMedia" class="quiet" type="button" disabled>交给 Agent 继续</button><button id="analyzeMedia" class="primary" type="button" disabled>分析画面 <span aria-hidden="true">↗</span></button></div>
+      </section>
+    </div>
+  </dialog>
+  <main hidden id="generationStudio" class="generation-studio" aria-labelledby="generationTitle">
+    <div class="generation-shell">
+      <aside class="generation-sidebar" aria-label="创作导航">
+        <div class="generation-sidebar-brand"><span class="generation-mark"><span class="ui-icon i-sparkles" aria-hidden="true"></span></span><div><strong id="generationTitle">创作中心</strong></div></div>
+        <button id="generationNew" class="generation-new" type="button"><span class="ui-icon i-plus" aria-hidden="true"></span> 新建创作 <kbd>⌘ N</kbd></button>
+        <div class="generation-sidebar-label">创作类型</div>
+        <nav class="generation-tabs" role="tablist" aria-label="生成类型">
+          <button id="generationTabImage" type="button" role="tab" aria-selected="true" aria-controls="generationPanelImage"><span class="ui-icon i-image" aria-hidden="true"></span><span>生图</span></button>
+          <button id="generationTabVideo" type="button" role="tab" aria-selected="false" aria-controls="generationPanelVideo"><span class="ui-icon i-film" aria-hidden="true"></span><span>生视频</span></button>
+          <button id="generationTabAudio" type="button" role="tab" aria-selected="false" aria-controls="generationPanelAudio"><span class="ui-icon i-audio" aria-hidden="true"></span><span>语音</span></button>
+        </nav>
+        <div id="generationQueue" aria-label="创作队列"></div>
+        <div class="generation-sidebar-label generation-history-label"><span>最近创作</span><button id="clearGenerationHistory" class="icon-button" type="button" aria-label="清空创作历史" title="清空创作历史"><span class="ui-icon i-trash" aria-hidden="true"></span></button></div>
+        <nav id="generationHistory" class="generation-history" aria-label="最近创作"></nav>
+        <div class="generation-sidebar-footer"><button id="manageGenerationModels" class="settings-link" type="button"><span class="ui-icon i-settings" aria-hidden="true"></span> 管理模型</button><span class="generation-storage-note"><span class="ui-icon i-lock" aria-hidden="true"></span> 创作记录保存在本机</span></div>
+      </aside>
+      <section class="generation-main">
+        <header class="generation-header">
+          <div class="generation-breadcrumb"><button id="closeGenerationStudio" class="icon-button" type="button" aria-label="返回工作区" title="返回工作区"><span class="ui-icon i-back" aria-hidden="true"></span></button><span>创作中心</span><span class="ui-icon i-chevron" aria-hidden="true"></span><strong id="generationTypeLabel">生图</strong></div>
+          <div class="generation-header-actions"><span id="generationStatus" class="generation-status" role="status" aria-live="polite"></span><button id="openCreationSettings" class="creation-settings-trigger" type="button" aria-haspopup="dialog"><span class="ui-icon i-sliders" aria-hidden="true"></span> 生成设置</button><button id="generationFocus" class="icon-button" type="button" aria-label="专注画布" title="专注画布"><span class="ui-icon i-panel" aria-hidden="true"></span></button></div>
+        </header>
+        <div class="generation-workspace">
+          <div class="generation-canvas-column">
+          <section class="generation-stage" aria-label="生成结果">
+            <div class="generation-stage-heading"><div><h2 id="generationStageTitle">新的画面</h2><p id="generationStageMeta">准备好开始创作</p></div><div class="generation-stage-actions"><button id="generationDuplicate" class="quiet" type="button" disabled><span class="ui-icon i-clipboard" aria-hidden="true"></span> 沿用参数</button><button id="saveGeneration" class="quiet" type="button" disabled><span class="ui-icon i-download" aria-hidden="true"></span> 导出</button></div></div>
+            <div class="generation-output" id="generationOutput"><div class="generation-empty"><span class="generation-empty-orbit"><span class="ui-icon i-sparkles" aria-hidden="true"></span></span><strong>你的作品会出现在这里</strong><span>在下方描述想法，选择模型后开始创作。</span></div></div>
+            <div class="generation-stage-footer"><span id="generationResultInfo">尚未生成作品</span><span class="generation-stage-shortcuts"><kbd id="generationKeyHint">Ctrl ↵</kbd> 生成</span></div>
+          </section>
+        <form id="generationComposer" class="generation-composer">
+          <div class="generation-composer-top"><span id="generationPromptLabel">画面描述</span><span id="generationPromptCount">0 / 8,000</span></div>
+          <label id="generationPromptFieldLabel" class="sr-only" for="generationImagePrompt">创作提示词</label><textarea id="generationImagePrompt" rows="3" maxlength="8000" placeholder="描述主体、风格、构图、光线和氛围…"></textarea>
+          <div class="generation-composer-bottom"><div class="generation-composer-tools"><button id="generationPreset" class="quiet" type="button" popovertarget="generationPresetMenu"><span class="ui-icon i-sparkles" aria-hidden="true"></span> 灵感模板</button><button id="generationPromptEnhance" class="quiet" type="button"><span class="ui-icon i-sparkles" aria-hidden="true"></span> 补充要点</button></div><span class="composer-spacer"></span><button id="cancelCreationEdit" class="quiet" type="button" hidden>取消编辑</button><button id="cancelGeneration" class="quiet danger" type="button" hidden><span class="ui-icon i-stop" aria-hidden="true"></span> 停止</button><button id="runGeneration" class="primary generation-submit" type="submit"><span class="ui-icon i-send" aria-hidden="true"></span> 开始生成</button></div>
+        </form>
+          </div>
+          <aside id="creationInspector" class="generation-inspector" aria-label="生成参数">
+            <div class="generation-inspector-heading"><div><h3 id="creationInspectorTitle">生成设置</h3></div><button id="resetGenerationSettings" class="icon-button" type="button" aria-label="重置生成设置" title="重置生成设置"><span class="ui-icon i-refresh" aria-hidden="true"></span></button></div>
+            <section id="generationPanelImage" class="generation-panel" role="tabpanel" aria-labelledby="generationTabImage">
+              <div class="generation-fields">
+                <label class="generation-span">模型<select id="generationImageModel"></select></label>
+                <label>尺寸<select id="generationImageSize"><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option><option>1792x1024</option></select></label>
+                <label>质量<select id="generationImageQuality"><option value="">模型默认</option><option value="standard">标准</option><option value="hd">高清</option></select></label>
+                <label>输出数量<select id="generationImageCount"><option value="1">1 张</option><option value="2">2 张</option><option value="4">4 张</option></select></label>
+                <label>风格<select id="generationImageStyle"><option value="">模型默认</option><option value="natural">自然</option><option value="vivid">鲜明</option><option value="cinematic">电影感</option><option value="illustration">插画</option></select></label>
+                <label class="generation-span generation-muted-field">接口路径<input id="generationImageEndpoint" value="/images/generations" spellcheck="false"></label>
+                <label class="generation-span">排除内容<textarea id="generationImageNegative" rows="2" maxlength="2000" placeholder="可选，例如：模糊、文字、水印…"></textarea></label>
+                <details class="generation-advanced generation-span"><summary>高级请求参数</summary><textarea id="generationImageOptions" aria-label="高级 JSON 参数" rows="4" spellcheck="false" placeholder='{"seed":42}'></textarea></details>
+              </div>
+            </section>
+            <section id="generationPanelVideo" class="generation-panel" role="tabpanel" aria-labelledby="generationTabVideo" hidden>
+              <div class="generation-fields">
+                <label class="generation-span">模型<select id="generationVideoModel"></select></label>
+                <label>时长<select id="generationVideoDuration"><option value="4">4 秒</option><option value="5" selected>5 秒</option><option value="8">8 秒</option><option value="12">12 秒</option><option value="10">10 秒</option><option value="15">15 秒</option><option value="20">20 秒</option></select></label>
+                <label>画幅<select id="generationVideoAspect"><option value="16:9">横屏 16:9</option><option value="9:16">竖屏 9:16</option><option value="1:1">方形 1:1</option></select></label>
+                <label>镜头运动<select id="generationVideoMotion"><option value="auto">自动</option><option value="static">固定镜头</option><option value="pan">平移</option><option value="zoom">推进</option><option value="orbit">环绕</option></select></label>
+                <label>音频提示<select id="generationVideoAudio"><option value="auto">自动</option><option value="on">开启</option><option value="off">关闭</option></select></label>
+                <label class="generation-span generation-muted-field">接口路径<input id="generationVideoEndpoint" value="/videos" spellcheck="false"></label>
+                <label class="generation-span">排除内容<textarea id="generationVideoNegative" rows="2" maxlength="2000" placeholder="可选，例如：跳帧、抖动、字幕…"></textarea></label>
+                <details class="generation-advanced generation-span"><summary>任务与高级参数</summary><input id="generationVideoPollEndpoint" aria-label="视频任务查询路径" placeholder="任务查询路径，例如 /videos/{id}" spellcheck="false"><input id="generationVideoContentEndpoint" aria-label="视频下载路径" placeholder="视频下载路径，例如 /videos/{id}/content" spellcheck="false"><textarea id="generationVideoOptions" aria-label="高级 JSON 参数" rows="3" spellcheck="false" placeholder='{"seed":42}'></textarea></details>
+              </div>
+            </section>
+            <section id="generationPanelAudio" class="generation-panel" role="tabpanel" aria-labelledby="generationTabAudio" hidden>
+              <div class="generation-fields">
+                <label class="generation-span">模型<select id="generationAudioModel"></select></label>
+                <label>音色<select id="generationAudioVoice"><option>alloy</option><option>ash</option><option>coral</option><option>echo</option><option>fable</option><option>onyx</option><option>nova</option><option>sage</option><option>shimmer</option></select></label>
+                <label>格式<select id="generationAudioFormat"><option>mp3</option><option>wav</option><option>opus</option></select></label>
+                <label>语速<select id="generationAudioSpeed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select></label>
+                <label class="generation-span generation-muted-field">接口路径<input id="generationAudioEndpoint" value="/audio/speech" spellcheck="false"></label>
+                <details class="generation-advanced generation-span"><summary>高级请求参数</summary><textarea id="generationAudioOptions" aria-label="高级 JSON 参数" rows="4" spellcheck="false" placeholder='{"instructions":"温柔、自然"}'></textarea></details>
+              </div>
+            </section>
+          </aside>
+        </div>
+        <div id="generationPresetMenu" class="generation-preset-menu" popover="auto" role="group" aria-label="创作灵感模板"></div>
+      </section>
+    </div>
+  </main>
+  <dialog id="proofStudio" aria-labelledby="proofHeading">
+    <header class="proof-bar">
+      <div><h2 id="proofHeading">局部改稿</h2><p>本地演示 · 使用示例文案</p></div>
+      <label>简报 <select id="proofBrief"><option value="launch">新品发布</option><option value="invite">体验邀请</option></select></label>
+      <button type="button" id="proofClose" class="icon-button" aria-label="关闭局部改稿"><span class="ui-icon i-close" aria-hidden="true"></span></button>
+    </header>
+    <div class="proof-layout">
+      <section class="proof-canvas" aria-label="海报和旁白稿">
+        <article class="proof-poster" id="proofPoster" aria-label="分层海报">
+          <div class="proof-folio"><span>Xiaoxiao Agent</span><span id="proofEdition"></span></div>
+          <img src="silk-knot.png" alt="作品底图中的彩色丝结" class="proof-art" draggable="false">
+          <button type="button" class="proof-object" id="proofTitleObject" aria-pressed="false" title="选择海报标题"></button>
+          <p class="proof-caption">底图已锁定</p>
+        </article>
+        <div class="proof-track"><label id="proofVoiceLabel">旁白稿</label><button type="button" id="proofVoiceObject" class="proof-object" aria-describedby="proofVoiceLabel" aria-pressed="false"></button></div>
+      </section>
+      <section class="proof-inspector" aria-label="局部修改">
+        <h3 id="proofTarget">想改哪里？</h3>
+        <p id="proofHelp">点选海报标题或旁白稿，再写下修改要求。</p>
+        <form id="proofForm">
+          <label for="proofPrompt">修改要求</label>
+          <textarea id="proofPrompt" rows="3" maxlength="240" placeholder="口语一点，或输入「改成：新文案」"></textarea>
+          <div class="proof-actions"><button type="button" id="proofDictate" aria-label="听写修改要求" title="听写修改要求"><span class="ui-icon i-mic" aria-hidden="true"></span></button><button type="submit" class="primary" id="proofPreview">预览修改</button></div>
+        </form>
+        <div id="proofCompare" hidden>
+          <div class="proof-comparison"><div><small>原文</small><p id="proofBefore"></p></div><div><small>提案</small><p id="proofAfter"></p></div></div>
+          <div class="proof-actions"><button type="button" id="proofDiscard">放弃提案</button><button type="button" class="primary" id="proofAccept">采纳修改</button></div>
+        </div>
+        <p id="proofStatus" role="status" aria-live="polite"></p>
+        <div class="proof-actions"><button type="button" id="proofSync" hidden>同步这句到旁白</button><button type="button" id="proofUndo" hidden>撤销上一步</button></div>
+      </section>
+    </div>
+  </dialog>
+  <dialog id="creationSettingsDialog" class="creation-settings-dialog" aria-labelledby="creationInspectorTitle">
+    <form method="dialog" class="dialog-actions"><button autofocus class="primary">完成</button></form>
+  </dialog>
+  <dialog id="creationGallery" class="creation-gallery" aria-labelledby="creationGalleryTitle">
+    <header class="gallery-toolbar">
+      <h2 id="creationGalleryTitle">图片预览</h2>
+      <span id="galleryPosition" role="status"></span>
+      <div class="gallery-tools">
+        <button id="galleryScale" class="quiet" type="button" aria-pressed="false">原始尺寸</button>
+        <button id="gallerySave" class="icon-button" type="button" title="导出当前图片" aria-label="导出当前图片"><span class="ui-icon i-download" aria-hidden="true"></span></button>
+        <button id="galleryClose" class="icon-button" type="button" title="关闭预览" aria-label="关闭预览"><span class="ui-icon i-close" aria-hidden="true"></span></button>
+      </div>
+    </header>
+    <div id="galleryViewport" class="gallery-viewport"><img id="galleryImage" alt=""></div>
+    <footer class="gallery-footer"><p id="galleryCaption"></p><div id="galleryNavigation">
+      <button id="galleryPrevious" class="icon-button" type="button" title="上一张" aria-label="上一张"><span class="ui-icon i-chevron" aria-hidden="true"></span></button>
+      <button id="galleryNext" class="icon-button" type="button" title="下一张" aria-label="下一张"><span class="ui-icon i-chevron" aria-hidden="true"></span></button>
+    </div></footer>
+  </dialog>
   <script src="../node_modules/marked/lib/marked.umd.js"></script>
   <script src="../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="markdown.js"></script>
+  <script src="reply-files.js"></script>
+  <script src="generated/editor.js"></script>
+  <script src="generated/terminal.js"></script>
+  <script src="renderer-terminal.js"></script>
+  <script src="renderer-code-assist.js"></script>
+  <script src="renderer-workspace.js"></script>
+  <script src="renderer-workbench.js"></script>
+  <script src="renderer-model-picker.js"></script>
+  <script src="renderer-conversations.js"></script>
+  <script src="silk-surface.js"></script>
+  <script src="silk-particles.js"></script>
+  <script src="silk-field.js"></script>
+  <script src="renderer-presence.js"></script>
+  <script src="conversation-scene.js"></script>
+  <script src="session-navigator.js"></script>
+  <script src="renderer-metrics.js"></script>
   <script src="renderer.js"></script>
+  <script src="renderer-media.js"></script>
+  <script src="renderer-generation.js"></script>
+  <script src="renderer-schedules.js"></script>
+  <script src="renderer-proof-studio.js"></script>
 </body>
 </html>

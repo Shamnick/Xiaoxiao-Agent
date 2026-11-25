@@ -1,0 +1,75 @@
+.conversation-metrics {
+  --meter-ink: var(--accent);
+  flex: none;
+  display: grid;
+  justify-items: center;
+  padding: 2px 10px 6px;
+}
+#metricsToggle {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px;
+  min-height: 30px;
+  background: none;
+  border: 0;
+  border-radius: 11px;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  anchor-name: --conversation-metrics;
+}
+#metricsToggle .metric-chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+  min-height: 25px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--subtle);
+}
+#metricsToggle:is(:hover,:focus-visible) .metric-chip,
+#metricsToggle:has(+ :popover-open) .metric-chip {
+  border-color: var(--control-line);
+  background: var(--inset);
+}
+.metric-chip b { font-weight: 550; color: var(--text); }
+.metric-icon { width: 14px; height: 14px; background: var(--meter-ink); mask: var(--shape) center / contain no-repeat; }
+.metric-gauge { --shape: url("icons/lucide/gauge.svg"); }
+.metric-database { --shape: url("icons/lucide/database.svg"); }
+.metric-dot { width: 2px; height: 2px; border-radius: 50%; background: currentColor; opacity: .65; }
+.metric-context svg { width: 15px; height: 15px; fill: none; stroke: var(--control-line); stroke-width: 3; }
+#metricArc { stroke: var(--meter-ink); transform: rotate(-90deg); transform-origin: center; }
+#metricsDetail {
+  position: fixed;
+  position-anchor: --conversation-metrics;
+  position-area: bottom center;
+  position-try-fallbacks: flip-inline, flip-block;
+  inset: auto;
+  margin: 6px 0 0;
+  padding: 16px 18px;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow: auto;
+  border: 1px solid var(--control-line);
+  border-radius: 14px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+  font-size: 13px;
+}
+#metricsDetail dl { display: grid; grid-template-columns: auto 1fr; gap: 9px 13px; margin: 11px 0 0; font-size: 12px; line-height: 1.55; }
+#metricsDetail dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+@container (max-width: 480px) {
+  .conversation-metrics { padding-inline: 4px; }
+  #metricsToggle { gap: 3px; }
+  #metricsToggle .metric-chip { gap: 4px; padding-inline: 6px; }
+  .metric-cache-label { display: none; }
+}

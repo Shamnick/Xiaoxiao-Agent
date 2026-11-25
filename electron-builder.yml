@@ -1,6 +1,11 @@
 appId: com.xiaoxiao.agent
 productName: Xiaoxiao Agent
 asar: true
+asarUnpack:
+  - "node_modules/node-pty/prebuilds/**"
+  - "node_modules/node-pty/build/Release/**"
+npmRebuild: false
+afterPack: scripts/sign-local-mac.cjs
 electronDist: node_modules/electron/dist
 directories:
   output: dist
@@ -9,6 +14,7 @@ files:
   - package.json
   - "!test/**/*"
   - "!scripts/**/*"
+  - "!src/*-entry.mjs"
 mac:
   icon: build/icon.icns
   category: public.app-category.productivity

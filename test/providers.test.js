@@ -1,9 +1,35 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {createServer} = require('node:http');
-const {config,run} = require('../src/providers');
+const {config,run,analyzeMedia,visualContent} = require('../src/providers');
 const doc = {name:'notes.txt',text:'fixture text'};
 const messages = [{role:'user',content:'Summarize this file.'}];
+test('builds provider-specific vision messages with bounded image data', () => {
+  const image = { mimeType: 'image/jpeg', data: Buffer.from('pixel').toString('base64'), timestamp: '00:02' };
+  const anthropic = visualContent(config({kind:'anthropic',name:'vision',model:'claude-vision'}), 'Inspect this frame.', [image])[0];
+  assert.equal(anthropic.content[0].type, 'text');
+  assert.equal(anthropic.content[1].source.media_type, 'image/jpeg');
+  assert.equal(anthropic.content[1].source.data, image.data);
+  const openai = visualContent(config({kind:'openai-compatible',name:'vision',model:'gpt-vision'}), 'Inspect this frame.', [image])[0];
+  assert.equal(openai.content[1].type, 'image_url');
+  assert.match(openai.content[1].image_url.url, /^data:image\/jpeg;base64,/);
+});
+test('rejects oversized or unsupported vision frames', () => {
+  assert.throws(() => visualContent(config({kind:'ollama',name:'vision',model:'llava'}), '', [{ mimeType:'image/gif', data:'Z' }]), /图像格式无效/);
+  assert.throws(() => visualContent(config({kind:'ollama',name:'vision',model:'llava'}), '', [{ mimeType:'image/jpeg', data:'A'.repeat(2_000_000) }]), /4 MiB|1 MiB/);
+});
+test('analyzeMedia sends the selected image to the model request', async () => {
+  let body;
+  const image = { mimeType: 'image/jpeg', data: Buffer.from('frame').toString('base64'), timestamp: '00:03' };
+  const request = async (_url, options) => {
+    body = JSON.parse(options.body);
+    return Response.json({ choices: [{ message: { content: '已检查画面' } }] });
+  };
+  const answer = await analyzeMedia(config({kind:'openai-compatible',name:'vision',model:'vision-model',baseUrl:'http://127.0.0.1:1234/v1'}), '检查画面', [image], { request });
+  assert.equal(answer, '已检查画面');
+  assert.equal(body.messages.at(-1).content.at(-1).type, 'image_url');
+  assert.match(body.messages.at(-1).content.at(0).text, /00:03/);
+});
 for (const kind of ['openai-compatible','anthropic','ollama']) test(kind + ' request and tool round-trip', async t => {
   const requests = [];
   const claude = kind === 'anthropic';
