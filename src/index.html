@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'nonce-h4Pl6tlYEReaB14x0Jr7IA=='; img-src 'self' data:; media-src blob: data:; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
   <meta name="editor-style-nonce" content="h4Pl6tlYEReaB14x0Jr7IA==">
   <title>Xiaoxiao Agent</title>
+  <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="generated/terminal.css">
   <link rel="stylesheet" href="workbench.css">
@@ -18,7 +19,7 @@
 <body class="presence-home">
   <button id="toggleSidebar" class="icon-button sidebar-toggle" aria-label="显示侧边栏" aria-expanded="false" aria-controls="sidebar" title="显示侧边栏"><span class="ui-icon i-side" aria-hidden="true"></span></button>
   <aside class="sidebar" id="sidebar" aria-label="侧边栏" hidden>
-    <a class="brand" href="#" id="brandHome" aria-label="Xiaoxiao Agent 首页"><img class="logo" src="brand-mark.png" alt="" width="22" height="22"><strong id="brandName">Xiaoxiao Agent</strong></a>
+    <a class="brand" href="#" id="brandHome" aria-label="Xiaoxiao Agent 首页"><img class="logo" src="silk-knot.png" alt="" width="32" height="24"><strong id="brandName">Xiaoxiao Agent</strong></a>
     <button id="enterWorkspace" class="settings-link" type="button"><span class="ui-icon i-panel" aria-hidden="true"></span>进入工作区</button>
     <div class="sidebar-actions">
       <button id="newChat" class="new-chat"><span class="ui-icon i-edit" aria-hidden="true"></span><span id="newChatLabel">新任务</span></button>
@@ -548,7 +549,7 @@
             <label><input type="radio" name="appearance" value="light"><span class="theme-swatch light" aria-hidden="true"></span><span>浅色</span></label>
             <label><input type="radio" name="appearance" value="dark"><span class="theme-swatch dark" aria-hidden="true"></span><span>深色</span></label>
           </fieldset>
-          <label>对话背景<select id="conversationScene"><option value="silk">丝结夜景</option><option value="workspace">跟随窗口外观</option></select></label>
+          <label>对话背景<select id="conversationScene"><option value="silk">丝结光纹</option><option value="workspace">纯净背景</option></select></label>
           <label>回复字体<select id="readingFont"><option value="serif">书籍衬线</option><option value="system">系统无衬线</option></select></label>
           <label>回复字号<select id="textSize"><option value="small">小</option><option value="">模型默认</option><option value="standard">标准</option><option value="large">大</option></select></label>
         </div>
@@ -686,7 +687,7 @@
   <main hidden id="generationStudio" class="generation-studio" aria-labelledby="generationTitle">
     <div class="generation-shell">
       <aside class="generation-sidebar" aria-label="创作导航">
-        <div class="generation-sidebar-brand"><span class="generation-mark"><span class="ui-icon i-sparkles" aria-hidden="true"></span></span><div><strong id="generationTitle">创作中心</strong></div></div>
+        <div class="generation-sidebar-brand"><img class="studio-brand-knot" src="silk-knot.png" width="38" height="30" alt=""><div><strong id="generationTitle">创作中心</strong></div></div>
         <button id="generationNew" class="generation-new" type="button"><span class="ui-icon i-plus" aria-hidden="true"></span> 新建创作 <kbd>⌘ N</kbd></button>
         <div class="generation-sidebar-label">创作类型</div>
         <nav class="generation-tabs" role="tablist" aria-label="生成类型">
@@ -708,7 +709,9 @@
           <div class="generation-canvas-column">
           <section class="generation-stage" aria-label="生成结果">
             <div class="generation-stage-heading"><div><h2 id="generationStageTitle">新的画面</h2><p id="generationStageMeta">准备好开始创作</p></div><div class="generation-stage-actions"><button id="generationDuplicate" class="quiet" type="button" disabled><span class="ui-icon i-clipboard" aria-hidden="true"></span> 沿用参数</button><button id="saveGeneration" class="quiet" type="button" disabled><span class="ui-icon i-download" aria-hidden="true"></span> 导出</button></div></div>
+            <div class="creation-frame"><div id="creationField" aria-hidden="true"><canvas></canvas></div>
             <div class="generation-output" id="generationOutput"><div class="generation-empty"><span class="generation-empty-orbit"><span class="ui-icon i-sparkles" aria-hidden="true"></span></span><strong>你的作品会出现在这里</strong><span>在下方描述想法，选择模型后开始创作。</span></div></div>
+            </div>
             <div class="generation-stage-footer"><span id="generationResultInfo">尚未生成作品</span><span class="generation-stage-shortcuts"><kbd id="generationKeyHint">Ctrl ↵</kbd> 生成</span></div>
           </section>
         <form id="generationComposer" class="generation-composer">
@@ -765,6 +768,7 @@
     <header class="proof-bar">
       <div><h2 id="proofHeading">局部改稿</h2><p id="proofVersion">读取作品中…</p></div>
       <label>简报 <select id="proofBrief"><option value="launch">新品发布</option><option value="invite">体验邀请</option></select></label>
+      <button type="button" id="proofExport" disabled>导出海报</button>
       <button type="button" id="proofClose" class="icon-button" aria-label="关闭局部改稿"><span class="ui-icon i-close" aria-hidden="true"></span></button>
     </header>
     <div class="proof-layout">
@@ -795,6 +799,12 @@
         <div class="proof-actions"><button type="button" id="proofSync" hidden>同步这句到旁白</button><button type="button" id="proofAudio" hidden>用这句制作语音</button><button type="button" id="proofUndo" hidden>撤销上一步</button></div>
       </section>
     </div>
+  </dialog>
+  <dialog id="proofDelivery" aria-labelledby="proofDeliveryHeading">
+    <header class="proof-bar"><div><h2 id="proofDeliveryHeading">海报预览</h2><p id="proofDeliveryMeta"></p></div>
+      <button type="button" id="proofDeliveryClose" class="icon-button" aria-label="返回改稿"><span class="ui-icon i-close" aria-hidden="true"></span></button></header>
+    <div class="proof-output"><img id="proofDeliveryImage" alt="海报导出预览"></div>
+    <footer><span id="proofDeliveryStatus" role="status"></span><button type="button" class="primary" id="proofSavePng">保存 PNG</button></footer>
   </dialog>
   <dialog id="creationSettingsDialog" class="creation-settings-dialog" aria-labelledby="creationInspectorTitle">
     <form method="dialog" class="dialog-actions"><button autofocus class="primary">完成</button></form>
@@ -840,6 +850,7 @@
   <script src="renderer-media.js"></script>
   <script src="renderer-generation.js"></script>
   <script src="renderer-schedules.js"></script>
+  <script src="renderer-proof-poster.js"></script>
   <script src="renderer-proof-studio.js"></script>
 </body>
 </html>

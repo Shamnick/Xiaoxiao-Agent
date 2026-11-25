@@ -41,7 +41,7 @@ const { Store } = require('../src/store');
       await fs.mkdir(dir, { recursive: true });
       await page.screenshot({ path: path.join(dir, name + '.png'), scale: 'css' });
     };
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.emulateMedia({ colorScheme: null, reducedMotion: 'no-preference' });
     await el('presenceKnot').waitFor();
     await page.mouse.move(840, 405);
     await page.waitForFunction(() => {
@@ -72,7 +72,7 @@ const { Store } = require('../src/store');
       await page.keyboard.press('Escape');
       await page.evaluate(() => document.activeElement.blur());
     }
-    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.emulateMedia({ colorScheme: null, reducedMotion: 'reduce' });
     await el('presenceKnot').waitFor();
     assert(await el('sidebar').isHidden());
     assert(await el('prompt').isHidden());
@@ -127,7 +127,7 @@ const { Store } = require('../src/store');
       await app.evaluate(() => globalThis.restoreDictationTest());
     }
     assert.equal(requests, 0);
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.emulateMedia({ colorScheme: null, reducedMotion: 'no-preference' });
     const flight = page.waitForSelector('.conversation-arrival-knot', { state: 'attached' });
     await el('prompt').fill(firstQuestion);
     await el('prompt').press('Enter');

@@ -9,21 +9,10 @@ body:has(.conversation-arrival-knot) #returnPresence img { visibility: hidden; }
   body:has(.conversation-arrival-knot) #returnPresence img { visibility: visible; }
 }
 body[data-conversation-scene="silk"]:not(.presence-home):has(#filePreview[hidden]):has(#generationStudio[hidden]) {
-  & :is(.main, #toggleSidebar, #sessionMenu, #reviseDialog, #renameDialog, #moveDialog, #deleteDialog, #searchDialog) {
-    color-scheme: dark;
-    --background: #0d1220; --surface: #1c2233; --subtle: #171e2f; --inset: #2a3045;
-    --text: #edf0fa; --muted: #b1bbd0; --line: #363e53; --control-line: #555e79;
-    --accent: #cfbef5; --accent-text: #262238; --accent-soft: #36304b; --focus: #b4b5ed;
-    --danger: #ffb9c1; --danger-soft: #412a38; --pending: #f6d19a; --pending-soft: #352e27;
-    --addition: #a7dabd; --addition-bg: #20382e; --deletion: #f6b6c2; --deletion-bg: #3a2834;
-    --shadow: 0 7px 22px #03060b2b; --floating-shadow: 0 18px 52px #02040b80;
-    color: var(--text);
-  }
   & .main {
     position: relative;
     container-type: inline-size;
-    background: radial-gradient(ellipse at 0 53%, #2c254640, transparent 52%),
-                radial-gradient(ellipse at 100% 36%, #17374d54, transparent 45%), var(--background);
+    background: var(--scene-paint);
   }
   & .topbar {
     background: transparent;
@@ -54,16 +43,16 @@ body[data-conversation-scene="silk"]:not(.presence-home):has(#filePreview[hidden
   & .chat-column:has(#hero:not([hidden])) #scrollArea { display: none; }
   & .chat { gap: clamp(23px, 3.5vh, 38px); padding-block: clamp(16px, 3.8vh, 40px); }
   & .message.user .message-content:not(.muted) {
-    padding: 10px 17px; border: 1px solid #584e71; border-radius: 19px 19px 5px 19px;
-    background: linear-gradient(120deg, #343148, #292638);
+    padding: 10px 17px; border: 1px solid color-mix(in srgb, var(--accent) 33%, var(--line)); border-radius: 19px 19px 5px 19px;
+    background: var(--accent-soft);
   }
   & .message.assistant {
     padding: 17px clamp(17px, 2.2cqi, 27px) 13px;
-    border: 1px solid #65719336; border-radius: 7px 23px 23px 23px;
-    background: linear-gradient(115deg, #21283bdf, #181e2dc9 62%, #171e2cbf);
+    border: 1px solid var(--line); border-radius: 7px 23px 23px 23px;
+    background: var(--sheet-paint);
   }
   & .message.assistant .message-label {
-    gap: 8px; margin-bottom: 13px; font-size: 12px; letter-spacing: .01em; color: #d5d9ec;
+    gap: 8px; margin-bottom: 13px; font-size: 12px; letter-spacing: .01em; color: var(--text);
   }
   & .message.assistant .message-label::after {
     content: ''; width: 38px; height: 1px; margin-left: 4px;
@@ -71,26 +60,26 @@ body[data-conversation-scene="silk"]:not(.presence-home):has(#filePreview[hidden
   }
   & .message-avatar { content: url("silk-knot.png"); width: 32px; height: 24px; }
   & .message.assistant .markdown > p:only-child { text-wrap: pretty; }
-  & .message-actions .message-action { color: #a1aec6; }
+  & .message-actions .message-action { color: var(--muted); }
   & .message-actions .message-action[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
   & .message-actions .message-action:hover { color: var(--text); background: var(--inset); }
-  & .message.assistant .markdown pre { border: 1px solid #364052; background: #101623; }
+  & .message.assistant .markdown pre { border: 1px solid var(--line); background: var(--subtle); }
   & .compose-area { padding-bottom: clamp(12px, 2.8vh, 28px); }
   & .composer {
-    border: 1px solid #52566e; border-radius: 23px;
-    background: linear-gradient(115deg,#27283a,#1c2332 70%,#1e2939);
-    box-shadow: inset 0 1px #b5c8fe0c, 0 8px 34px #04060d4a;
+    border: 1px solid var(--control-line); border-radius: var(--sheet-radius);
+    background: var(--sheet-paint);
+    box-shadow: var(--shadow);
   }
-  & .composer:focus-within { border-color: #9187ac; box-shadow: 0 0 0 2px #a8a3ed12, 0 8px 34px #04060d4a; }
+  & .composer:focus-within { border-color: var(--focus); box-shadow: var(--focus-shadow); }
   & .composer textarea { background: transparent; color: var(--text); }
   & .compose-meta { min-height: 37px; padding: 6px 12px 0; border: none; background: transparent; }
   & .mode-control { gap: 2px; }
   & .mode-control button { min-height: 28px; padding-inline: 9px; border-radius: 99px; }
-  & .mode-control button[aria-pressed="true"] { box-shadow: none; background: #52476180; color: #eadbf7; }
+  & .mode-control button[aria-pressed="true"] { box-shadow: none; background: var(--accent-soft); color: var(--accent); }
   & #composerToolsButton { border-color: transparent; }
-  & .model-trigger { background: #34394c; }
-  & .send { border-radius: 50%; background: #d6c8ec; color: #262137; }
-  & .send:disabled { background: #8f88aa; color: #242332; opacity: .73; }
+  & .model-trigger { background: var(--inset); }
+  & .send { border-radius: 50%; background: var(--accent); color: var(--accent-text); }
+  & .send:disabled { background: var(--inset); color: var(--muted); opacity: .73; }
   @container (min-width: 780px) {
     & .topbar:not(:has(#workspaceBrowserButton:not([hidden]))) {
       & .topbar-leading { max-width: calc(50cqi - 125px); }
@@ -101,9 +90,9 @@ body[data-conversation-scene="silk"]:not(.presence-home):has(#filePreview[hidden
       & #returnPresence::before, & #returnPresence::after { display: none; }
       & #returnPresence img { width: 41px; height: auto; }
       & .room-wordmark { display: inline-flex; align-items: center; gap: 9px; }
-      & .room-wordmark b { font: 610 15px/1 system-ui, sans-serif; letter-spacing: -.055em; color: #e4e7f4; }
+      & .room-wordmark b { font: 610 15px/1 system-ui, sans-serif; letter-spacing: -.055em; color: var(--text); }
       & .room-wordmark small {
-        border-left: 1px solid #8e9dc55c; padding-left: 9px; color: #b2bcd2;
+        border-left: 1px solid #8e9dc55c; padding-left: 9px; color: var(--muted);
         font: 550 10px/1.12 ui-monospace, Menlo, monospace; letter-spacing: .19em; text-transform: uppercase;
       }
     }
@@ -120,7 +109,7 @@ body[data-conversation-scene="silk"]:not(.presence-home):has(#filePreview[hidden
     & .workbench { animation: chat-arrival .25s ease-out both; }
   }
   @media (prefers-contrast: more) {
-    & .composer, & .message.assistant, & .message.user .message-content { border-color: #8090aa; }
+    & .composer, & .message.assistant, & .message.user .message-content { border-color: var(--control-line); }
     & .conversation-field { opacity: .35; }
   }
 }

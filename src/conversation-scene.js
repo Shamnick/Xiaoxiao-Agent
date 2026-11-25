@@ -2,11 +2,11 @@
 
 // Draw the strands when the reading area changes size. Only the few travelling
 // lights are animated, by CSS, while an actual response is in progress.
-function installConversationField(field) {
+function installSilkStrands(field, { travellingLights = false } = {}) {
   const canvas = field.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const lights = Array.from({length: 6}, () => field.appendChild(document.createElement('i')));
+  const lights = travellingLights ? Array.from({length: 6}, () => field.appendChild(document.createElement('i'))) : [];
   const noise = n => (Math.sin(n * 83.17 + 3.41) * 8241.43) % 1;
   function draw(width, height) {
     if (!width || !height) return;
@@ -14,7 +14,7 @@ function installConversationField(field) {
     canvas.width = Math.round(width * scale);
     canvas.height = Math.round(height * scale);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    const margin = Math.max(0, (width - 740) * .5);
+    const margin = travellingLights ? Math.max(0, (width - 740) * .5) : width * .19;
     const breadth = Math.min(278, Math.max(32, margin * .91));
     const intensity = Math.min(1, breadth / 150);
     for (let side = 0; side < 2; side++) {
@@ -54,7 +54,7 @@ function installConversationField(field) {
         ctx.arc(x,y,i % 11 === 0 ? 1.25 : .65,0,2*Math.PI);
         ctx.fill();
       }
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; travellingLights && i < 3; i++) {
         const light = lights[side*3+i];
         const lane = -.64+i*.65;
         const points = Array.from({length: 58}, (_, j) => {

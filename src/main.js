@@ -360,6 +360,13 @@ function proofBook(scope) {
   return scope.conversationId ? conversation(scope.conversationId).proofBook : store.read(proofShelf(scope.projectId), {});
 }
 handle('proof:read', (_, input) => proof.snapshot(proofBook(input), input.brief));
+handle('proof:art', async (_, input) => {
+  const version = proof.snapshot(proofBook(input), input.brief);
+  if (version.id !== input.base) throw Error('作品版本已更新，请重新打开简报');
+  const bytes = await fs.promises.readFile(path.join(__dirname, version.brief.art));
+  if (createHash('sha256').update(bytes).digest('hex') !== version.asset.sha256) throw Error('底图与当前版本不一致');
+  return 'data:image/png;base64,' + bytes.toString('base64');
+});
 handle('proof:change', (_, input) => {
   const c = input.conversationId ? conversation(input.conversationId) : null;
   if (c) idle(c.id);
@@ -828,7 +835,7 @@ const preferenceOptions = {
   textSize: ['standard', 'large', 'small'], sendKey: ['enter', 'modifier']
 };
 function preferences() {
-  return { appearance: 'system', conversationScene: 'silk', readingFont: 'serif', textSize: 'standard', sendKey: 'enter', defaultModel: '',
+  return { appearance: 'dark', conversationScene: 'silk', readingFont: 'serif', textSize: 'standard', sendKey: 'enter', defaultModel: '',
     ...store.read('preferences', {}) };
 }
 handle('preferences:get', () => preferences());

@@ -89,6 +89,7 @@ async function run() {
     }
     if (qa) {
       await fs.mkdir(qa, { recursive: true });
+      await page.emulateMedia({ colorScheme: 'light' });
       await page.screenshot({ path: path.join(qa, 'generation-studio-light.png'), scale: 'css' });
       await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(900, 600));
       await page.locator('#openCreationSettings').waitFor();

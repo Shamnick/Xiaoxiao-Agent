@@ -62,7 +62,7 @@ function runStatus(run) {
   if (run.interaction?.kind === 'question') return '待回答';
   return run.status || '正在运行';
 }
-let prefs = { appearance: 'system', conversationScene: 'silk', readingFont: 'serif', textSize: 'standard', sendKey: 'enter', defaultModel: '' };
+let prefs = { appearance: 'dark', conversationScene: 'silk', readingFont: 'serif', textSize: 'standard', sendKey: 'enter', defaultModel: '' };
 function newChatModel() {
   return providers.find(p => p.id === prefs.defaultModel)?.id || providers[0]?.id || '';
 }
@@ -1851,7 +1851,7 @@ async function initialize() {
           $(prefix + 'BrandSuffix').hidden = !parts;
         }
       }
-      if (mark || icon) for (const img of document.querySelectorAll('.logo, .message-avatar')) img.src = mark || icon;
+      if (mark || icon) for (const img of document.querySelectorAll('.logo, .studio-brand-knot, .message-avatar')) img.src = mark || icon;
       for (const element of document.querySelectorAll('[aria-label="Xiaoxiao Agent 首页"]')) element.setAttribute('aria-label', name + '首页');
     }),
     api.preferences.get().then(applyPreferences).finally(() => refreshProviders()),
@@ -1873,7 +1873,8 @@ async function initialize() {
   for(const result of results)if(result.status==='rejected')showError(result.reason);
   locked=false;update();if (!presence.isHome()) focusPrompt();
 }
-installConversationField($('conversationField'));
+installSilkStrands($('conversationField'), { travellingLights: true });
+installSilkStrands($('creationField'));
 const presence = createPresence();
 const showConnectionCheck = installConnectionCheck();
 installSessionActions();

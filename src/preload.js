@@ -9,7 +9,7 @@ const subscribe = channel => callback => {
 contextBridge.exposeInMainWorld('nova', {
   platform: process.platform,
   brand: call('brand:get'),
-  proof: { read: call('proof:read'), change: call('proof:change'), preview: call('proof:preview'), cancel: call('proof:cancel') },
+  proof: { read: call('proof:read'), art: call('proof:art'), change: call('proof:change'), preview: call('proof:preview'), cancel: call('proof:cancel') },
   presence: { sample: call('presence:sample'), dictate: call('presence:dictate') },
   providers: {
     list: call('providers:list'), save: call('providers:save'), delete: call('providers:delete'),

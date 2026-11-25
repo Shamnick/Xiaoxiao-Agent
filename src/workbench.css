@@ -28,7 +28,7 @@
 .pane-switch button { min-height: 31px; }
 
 .file-preview { border-top: 0; }
-.file-preview-header { align-items: center; gap: 9px; min-height: 43px; padding: 0 9px; }
+.file-preview-header { background: var(--sheet-paint); align-items: center; gap: 9px; min-height: 43px; padding: 0 9px; }
 .file-preview-header > button { flex: none; margin: 0; }
 .editor-tabs { display: flex; align-self: stretch; flex: 1; gap: 1px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .editor-tab { display: flex; flex: 0 0 auto; align-items: center; max-width: 212px; min-width: 0; padding-inline: 1px 4px; border-inline-end: 1px solid var(--line); }
@@ -180,9 +180,9 @@
 .tree-note { margin: 4px 5px; font-size: 12px; overflow-wrap: anywhere; }
 .file-entry[aria-expanded='true'] .i-chevron { transform: rotate(90deg); }
 .development-toggle[aria-pressed='true'] { border-color: var(--line); background: var(--accent-soft); color: var(--accent); }
-.editor-empty { display: grid; flex: 1; align-content: center; justify-items: center; gap: 12px; padding: 24px 14px; text-align: center; }
+.editor-empty { background: var(--scene-paint); display: grid; flex: 1; align-content: center; justify-items: center; gap: 12px; padding: 24px 14px; text-align: center; }
 .editor-empty > .ui-icon { width: 29px; height: 29px; color: var(--accent); }
-.editor-empty > h3 { margin: 0; font-size: 16px; font-weight: 610; }
+.editor-empty > h3 { margin: 0; letter-spacing: -.025em; font-size: 19px; font-weight: 610; }
 .editor-empty > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 .editor-empty .toolbar-action { border-color: var(--line); }
 .editor-empty kbd { color: var(--muted); font-family: var(--font-code); }

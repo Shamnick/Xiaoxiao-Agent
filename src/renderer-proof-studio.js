@@ -16,6 +16,8 @@
   let target;
   let awaitingTarget = false;
   let dictationTurn = 0;
+  const delivery = el('proofDelivery');
+  let sheet, savingPng = false, deliveryTurn = 0;
 
   function status(text = '') { el('proofStatus').textContent = text; }
   function focusAction(id) { el(id).focus({ preventScroll: true }); }
@@ -31,6 +33,7 @@
     el('proofTarget').textContent = target ? '修改' + names[target] : '想改哪里？';
     el('proofHelp').textContent = target ? '只修改选中的对象，可先比较再采纳。' : '点选标题、正文或旁白，再写下修改要求。';
     el('proofCompare').hidden = !draft;
+    el('proofExport').disabled = Boolean(draft);
     el('proofForm').hidden = Boolean(draft);
     el('proofAudio').hidden = Boolean(draft) || target !== 'voice';
     el('proofSync').hidden = Boolean(draft) || target !== 'title' || title === voice;
@@ -48,6 +51,7 @@
     const id = el('proofBrief').value;
     cancelModelPreview();
     session = null;
+    el('proofExport').disabled = true;
     el('proofVersion').textContent = '读取作品中…';
     dialog.querySelector('.proof-layout').inert = true;
     try {
@@ -120,6 +124,7 @@
   async function commit(input, message, focus) {
     if (saving || !session) return;
     saving = true;
+    el('proofExport').disabled = true;
     el('proofBrief').disabled = el('proofClose').disabled = true;
     dialog.querySelector('.proof-layout').inert = true;
     status('正在保存…');
@@ -135,6 +140,7 @@
       status(note);
     } finally {
       saving = false;
+      el('proofExport').disabled = !session || Boolean(draft);
       el('proofBrief').disabled = el('proofClose').disabled = false;
       dialog.querySelector('.proof-layout').inert = !session;
       nodes[focus].focus();
@@ -184,6 +190,53 @@
     };
   }
   el('proofClose').onclick = () => dialog.close();
+  el('proofExport').onclick = async () => {
+    if (!session || draft || saving || delivery.open) return;
+    const version = session;
+    const turn = ++deliveryTurn;
+    const image = el('proofDeliveryImage');
+    image.removeAttribute('src');
+    image.hidden = true;
+    el('proofSavePng').disabled = true;
+    el('proofDeliveryStatus').textContent = '正在排版…';
+    el('proofDeliveryMeta').textContent = version.brief.edition;
+    delivery.showModal();
+    el('proofDeliveryClose').focus();
+    try {
+      const art = await api.art({...scope,brief:el('proofBrief').value,base:version.id});
+      const raster = await renderProofPoster(version,art);
+      if (turn !== deliveryTurn || !delivery.open) return;
+      image.src = raster.url;
+      image.alt = version.current.title + '。' + version.current.body;
+      image.hidden = false;
+      sheet = {data:raster.url.split(',')[1],mimeType:'image/png',filename:version.brief.edition+'-v'+version.number+'.png',kind:'image'};
+      el('proofDeliveryMeta').textContent = version.brief.edition + ' · v' + version.number + ' · ' + raster.width + ' × ' + raster.height;
+      el('proofDeliveryStatus').textContent = '';
+      el('proofSavePng').disabled = false;
+    } catch (error) { if (turn === deliveryTurn) el('proofDeliveryStatus').textContent = errorMessage(error); }
+  };
+  el('proofSavePng').onclick = async () => {
+    if (!sheet || savingPng) return;
+    savingPng = true;
+    el('proofSavePng').disabled = el('proofDeliveryClose').disabled = true;
+    try {
+      const saved = await window.nova.generation.save(sheet);
+      el('proofDeliveryStatus').textContent = saved ? '海报已保存。' : '已取消，仍可继续保存。';
+    } catch (error) { el('proofDeliveryStatus').textContent = errorMessage(error); }
+    finally {
+      savingPng = false;
+      el('proofSavePng').disabled = el('proofDeliveryClose').disabled = false;
+      el('proofSavePng').focus();
+    }
+  };
+  el('proofDeliveryClose').onclick = () => delivery.close();
+  delivery.addEventListener('cancel', event => { if (savingPng) event.preventDefault(); });
+  delivery.addEventListener('close', () => {
+    ++deliveryTurn;
+    sheet = null;
+    el('proofDeliveryImage').removeAttribute('src');
+    el('proofExport').focus();
+  });
   dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
   dialog.addEventListener('close', () => { ++generation; ++dictationTurn; cancelModelPreview(); opener?.focus(); });
   el('proofBrief').onchange = chooseBrief;

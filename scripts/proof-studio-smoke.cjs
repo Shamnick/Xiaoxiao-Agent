@@ -54,6 +54,36 @@ const { _electron: electron } = require('playwright');
     const original = await text('proofTitleObject');
     const art = page.locator('.proof-art');
     const originalArt = await art.getAttribute('src');
+    const output = process.env.XIAOXIAO_SMOKE_QA_DIR;
+    if (output) await fs.mkdir(output,{recursive:true});
+    async function exportPoster(label, cancelFirst = false) {
+      const file = path.join(output || data,label+'.png');
+      await node('proofExport').click();
+      await node('proofDeliveryImage').waitFor();
+      const expected = await node('proofDeliveryImage').getAttribute('src');
+      if (cancelFirst) {
+        const canceledFile = path.join(data,'canceled.png');
+        await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:true,filePath:file});},canceledFile);
+        await node('proofSavePng').click();
+        await page.getByText('已取消，仍可继续保存。',{exact:true}).waitFor();
+        assert.equal(await fs.stat(canceledFile).catch(()=>null),null);
+      }
+      await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},file);
+      await node('proofSavePng').click();
+      await page.getByText('海报已保存。',{exact:true}).waitFor();
+      const bytes = await fs.readFile(file);
+      assert.equal(bytes.toString('base64'),expected.slice('data:image/png;base64,'.length));
+      assert.equal(bytes.readUInt32BE(16),1440);
+      assert.equal(bytes.readUInt32BE(20),900);
+      const artPixels = await app.evaluate(({nativeImage},file)=>{
+        const image = nativeImage.createFromPath(file);
+        return image.crop({x:740,y:135,width:620,height:665}).toBitmap().toString('base64');
+      },file);
+      await page.keyboard.press('Escape');
+      await focus('proofExport');
+      return {bytes,artPixels};
+    }
+    const initial = await exportPoster('poster-original',true);
     await node('proofPrompt').fill('口语一点，底图留着');
     await node('proofPreview').click();
     await focus('proofTitleObject');
@@ -64,7 +94,7 @@ const { _electron: electron } = require('playwright');
     const changed = await text('proofAfter');
     assert.notEqual(changed, original);
     assert.equal(await text('proofTitleObject'), original);
-    const output = process.env.XIAOXIAO_SMOKE_QA_DIR;
+    assert(await node('proofExport').isDisabled());
     if (output) {
       await fs.mkdir(output, { recursive: true });
       await page.screenshot({ path: path.join(output, 'proof-comparison.png'), scale: 'css' });
@@ -73,6 +103,9 @@ const { _electron: electron } = require('playwright');
     assert.equal(await text('proofTitleObject'), changed);
     assert.equal(await text('proofVoiceObject'), original);
     assert.equal(await art.getAttribute('src'), originalArt);
+    const edited = await exportPoster('poster-edited');
+    assert.notDeepEqual(edited.bytes, initial.bytes);
+    assert.equal(edited.artPixels, initial.artPixels);
     await node('proofSync').click();
     await node('proofDiscard').click();
     assert.equal(await text('proofVoiceObject'), original);
@@ -84,6 +117,8 @@ const { _electron: electron } = require('playwright');
     assert.equal(await text('proofTitleObject'), changed);
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
     assert.equal(await text('proofTitleObject'), original);
+    const reverted = await exportPoster('poster-reverted');
+    assert.deepEqual(reverted.bytes,initial.bytes);
     await node('proofBrief').selectOption('invite');
     const otherTitle = await text('proofTitleObject');
     assert.notEqual(otherTitle, original);
@@ -170,7 +205,7 @@ const { _electron: electron } = require('playwright');
     assert.deepEqual(errors, []);
     assert.deepEqual(network, []);
     assert.equal(calls.length,2);
-    console.log('PASS: offline edits, explicit voice sync, undo, restart, independent branch, selected-only model context, stale request cancellation, audio draft and keyboard focus.');
+    console.log('PASS: PNG preview, export, cancel, unchanged artwork pixels, byte-identical rollback, scoped edits, branch, restart, model cancellation and narration.');
   } finally {
     try { await app?.close(); } finally { server.closeAllConnections(); server.close(); await fs.rm(data, { recursive: true, force: true }); }
   }
