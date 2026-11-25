@@ -76,3 +76,34 @@ test('reads binary speech responses and polls video jobs', async () => {
 test('rejects invalid relative generation paths', async () => {
   await assert.rejects(generateAsset(provider, { kind: 'image', prompt: 'x', endpoint: 'https://evil.invalid' }), /接口路径无效/);
 });
+
+test('persists a video receipt before fetching an inline download URL', async () => {
+  const calls = [];
+  await assert.rejects(generateAsset(provider, { kind: 'video', prompt: 'clip' }, {
+    onVideoId: async id => { await Promise.resolve(); calls.push(id); },
+    request: async (url, options) => {
+      calls.push(options.method || 'GET');
+      if (options.method === 'POST') return Response.json({ id: '', task_id: 'job-2', video_url: provider.baseUrl + '/clip' });
+      return new Response(null, { status: 204 });
+    }
+  }), /结果为空/);
+  assert.deepEqual(calls, ['POST', 'job-2', 'GET']);
+});
+
+test('keeps direct video delivery usable when an unrelated response ID cannot be polled', async () => {
+  let recorded = false;
+  const result = await generateAsset(provider, {kind:'video', prompt:'clip'}, {
+    onVideoId: () => { recorded = true; },
+    request: async () => Response.json({id:'group/invalid', video_base64:'AQ=='})
+  });
+  assert.equal(recorded, false);
+  assert.equal(result.data, 'AQ==');
+});
+
+test('rejects empty binary media returned directly at submission', async () => {
+  for (const kind of ['image', 'video', 'audio']) {
+    await assert.rejects(generateAsset(provider, {kind, prompt:'sample'}, {
+      request: async () => new Response(null, {status:204})
+    }), /结果为空/);
+  }
+});

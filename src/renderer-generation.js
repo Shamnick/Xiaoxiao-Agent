@@ -341,6 +341,7 @@ function renderGenerationResult() {
     }
     if (article.dataset.state === (item.state || 'done')) continue;
     article.dataset.state = item.state || 'done';
+    article.setAttribute('aria-busy', String(item.state === 'running'));
     const prompt = document.createElement('p');
     prompt.className = 'creation-question';
     prompt.textContent = item.prompt;
@@ -566,7 +567,8 @@ function renderCreationQueue() {
     const row = document.createElement('div');
     row.className = 'generation-queued';
     const title = document.createElement('span');
-    title.textContent = (job === runningCreation ? '生成中' : '等待中') + ' · ' + (job.input.prompt || job.item.prompt);
+    const phase = job === runningCreation ? (job.input.resume ? '查询原任务' : '生成中') : '等待中';
+    title.textContent = phase + ' · ' + (job.input.prompt || job.item.prompt);
     title.title = title.textContent;
     const cancel = document.createElement('button');
     cancel.type = 'button';
@@ -586,9 +588,14 @@ function renderCreationQueue() {
 }
 
 api.generation.onEvent(event => {
-  if (event.requestId !== generationRequestId) return;
-  runningCreation.status = event.text;
-  if (creationThread(runningCreation.item) === activeThread()) $('generationStatus').textContent = event.text;
+  if (!runningCreation || runningCreation.cancelled || event.requestId !== generationRequestId) return;
+  const { item } = runningCreation;
+  item.status = runningCreation.status = event.text;
+  if (creationThread(item) === activeThread()) {
+    $('generationStatus').textContent = event.text;
+    const preview = document.getElementById('creation-' + item.id)?.querySelector('.creation-preview');
+    if (preview && item.state === 'running') preview.textContent = event.text;
+  }
 });
 
 $('openGenerationStudio').onclick = () => {
@@ -791,7 +798,11 @@ async function processCreationQueue() {
   const { input, item } = job;
   generationRequestId = item.id;
   item.state = 'running';
-  if (activeThread() === item.threadId) renderGenerationResult();
+  item.status = job.status = input.resume ? '正在连接原视频任务…' : '准备生成…';
+  if (activeThread() === item.threadId) {
+    $('generationStatus').textContent = item.status;
+    renderGenerationResult();
+  }
   renderCreationQueue();
   try {
     const recordingError = await job.recorded;

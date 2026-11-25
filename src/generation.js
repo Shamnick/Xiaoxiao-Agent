@@ -50,6 +50,12 @@ async function jsonResponse(response) {
   catch { throw Error('生成服务返回的 JSON 无法解析'); }
 }
 
+async function mediaBytes(response, label) {
+  const bytes = await readLimited(response, MAX_OUTPUT, label);
+  if (!bytes.length) throw Error(`${label}为空，未取得文件`);
+  return bytes;
+}
+
 function base64Asset(data, mimeType, filename) {
   if (typeof data !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) throw Error('生成服务返回了无效的 base64 数据');
   const bytes = Buffer.from(data, 'base64');
@@ -63,7 +69,7 @@ async function urlAsset(url, mimeType, filename, signal, request) {
   if (!['http:', 'https:'].includes(parsed.protocol)) throw Error('生成服务返回了不支持的资源地址');
   const response = await request(parsed.href, { signal, redirect: 'follow' });
   if (!response.ok) throw Error(`读取生成结果失败 HTTP ${response.status}`);
-  const data = await readLimited(response, MAX_OUTPUT, '生成结果');
+  const data = await mediaBytes(response, '生成结果');
   return { data: data.toString('base64'), mimeType: mimeType || response.headers.get('content-type') || 'application/octet-stream', filename };
 }
 
@@ -162,22 +168,29 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   const response = await request(url, init);
   if (!response.ok) throw Error(`生成服务返回 HTTP ${response.status}`);
   if (kind !== 'audio' && !(response.headers.get('content-type') || '').includes('json')) {
-    const data = await readLimited(response, MAX_OUTPUT, '生成结果');
+    const data = await mediaBytes(response, '生成结果');
     const mimeType = response.headers.get('content-type') || (kind === 'image' ? 'image/png' : 'video/mp4');
     return { data: data.toString('base64'), mimeType, filename: kind === 'image' ? 'xiaoxiao-image.png' : 'xiaoxiao-video.mp4' };
   }
   if (kind === 'audio' && !(response.headers.get('content-type') || '').includes('json')) {
-    const data = await readLimited(response, MAX_OUTPUT, '语音结果');
+    const data = await mediaBytes(response, '语音结果');
     const mimeType = body.response_format === 'mp3' ? 'audio/mpeg' : `audio/${body.response_format}`;
     return { data: data.toString('base64'), mimeType, filename: `xiaoxiao-audio.${body.response_format}` };
   }
-  let payload = await jsonResponse(response);
-  let assets = await materializeAssets(responseAssets(payload, kind), signal, request);
+  const payload = await jsonResponse(response);
+  const ids = kind === 'video' ? [payload?.id, payload?.task_id, payload?.data?.id] : [];
+  const videoId = ids.find(id => (typeof id === 'string' || Number.isSafeInteger(id))
+    && /^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,255}$/.test(String(id)));
+  // The download may fail or be interrupted even when the submission already succeeded.
+  if (videoId !== undefined) await onVideoId(String(videoId));
+  const outputs = responseAssets(payload, kind);
+  if (kind === 'video' && outputs.some(asset => asset.url)) onStatus({ phase: 'download', text: '正在下载生成的视频…' });
+  const assets = await materializeAssets(outputs, signal, request);
   if (assets.length) return { ...assets[0], assets };
-  const videoId = payload?.id || payload?.task_id || payload?.data?.id;
-  if (kind !== 'video' || !videoId) throw Error('生成服务没有返回可播放的结果');
-  if (!/^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,255}$/.test(String(videoId))) throw Error('远程视频任务号无效');
-  await onVideoId(String(videoId));
+  if (videoId === undefined) {
+    if (ids.some(id => id != null && id !== '')) throw Error('远程视频任务号无效');
+    throw Error('生成服务没有返回可播放的结果');
+  }
   return pollVideo(provider, input, String(videoId), { signal, request, pollDelayMs, onStatus });
 }
 
@@ -188,13 +201,15 @@ async function pollVideo(provider, input, videoId, { signal, request = fetch, po
   const pollUrl = pollPath ? endpoint(provider.baseUrl, pollPath, '') : `${url.replace(/\/$/, '')}/${encodeURIComponent(String(videoId))}`;
   for (let attempt = 0; attempt < 90; attempt++) {
     await wait(pollDelayMs, signal);
-    onStatus({ phase: 'poll', attempt: attempt + 1, text: `视频生成中 · 已检查 ${attempt + 1} 次` });
+    onStatus({ phase: 'poll', attempt: attempt + 1, text: `正在查询视频任务 · 第 ${attempt + 1} 次` });
     const poll = await request(pollUrl, { headers: headers(provider), signal, redirect: 'error' });
     if (!poll.ok) throw Error(`视频任务查询失败 HTTP ${poll.status}`);
     const payload = await jsonResponse(poll);
     const status = String(payload.status || '').toLowerCase();
     if (['failed', 'cancelled', 'canceled', 'error'].includes(status)) throw Error(payload.error?.message || '视频生成失败');
-    const assets = await materializeAssets(responseAssets(payload, kind), signal, request);
+    const outputs = responseAssets(payload, kind);
+    if (outputs.some(asset => asset.url)) onStatus({ phase: 'download', text: '正在下载生成的视频…' });
+    const assets = await materializeAssets(outputs, signal, request);
     if (assets.length) return { ...assets[0], assets };
     if (['completed', 'complete', 'succeeded', 'success', 'done'].includes(status)) {
       const contentPath = input.contentEndpoint
@@ -211,7 +226,7 @@ async function pollVideo(provider, input, videoId, { signal, request = fetch, po
         const finalAssets = await materializeAssets(responseAssets(finalPayload, kind), signal, request);
         if (finalAssets.length) return { ...finalAssets[0], assets: finalAssets };
       } else {
-        const data = await readLimited(content, MAX_OUTPUT, '视频结果');
+        const data = await mediaBytes(content, '视频结果');
         return { data: data.toString('base64'), mimeType: 'video/mp4', filename: 'xiaoxiao-video.mp4' };
       }
       throw Error('视频任务已完成，但服务没有返回视频文件');
