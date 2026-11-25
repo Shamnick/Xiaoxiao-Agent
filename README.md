@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/Shamnick/Xiaoxiao-Agent/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/Shamnick/Xiaoxiao-Agent/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version 0.6.9" src="https://img.shields.io/badge/version-0.6.9-584985">
+  <img alt="Version 0.6.10" src="https://img.shields.io/badge/version-0.6.10-584985">
   <img alt="Electron" src="https://img.shields.io/badge/desktop-Electron-183449">
   <img alt="macOS Apple Silicon" src="https://img.shields.io/badge/verified-macOS%20Apple%20Silicon-6a8b7c">
 </p>
@@ -30,9 +30,9 @@ Xiaoxiao Agent 是一个独立开发的多模型桌面工作空间。打开本�
 
 ![对话、创作中心、设置和局部改稿的浅深色界面](docs/images/silk-workspaces.jpg)
 
-> 界面截图使用演示数据。0.6.9 面向 Apple Silicon Mac 本地试用。任务工具需要模型支持工具调用，视觉实验室需要支持图像输入的模型。
+> 界面截图使用演示数据。0.6.10 面向 Apple Silicon Mac 本地试用。任务工具需要模型支持工具调用，视觉实验室需要支持图像输入的模型。
 
-点开首页丝结，进入「试试局部改稿」。可以只改海报标题，比较后采纳，预览并导出 PNG 海报，再把满意的一句送到语音工作室。在 Mac 上选择系统语音即可导出 WAV。已取得任务号的视频，重启后也能从历史继续查询。[本版验证记录](docs/innovation-roadmap.md#069-局部改稿--2026-年-11-月-25-日)
+点开首页丝结，进入「试试局部改稿」。可以只改海报标题，比较后采纳，预览并导出 PNG 海报，再把满意的一句送到语音工作室。在 Mac 上选择系统语音即可导出 WAV。已取得任务号的视频，重启后也能从历史继续查询。生图会话里可并排比较两轮作品，分别查看提示词并导出原图。[分期进度](docs/innovation-roadmap.md)
 
 <details>
 <summary>查看对话和任务界面</summary>
@@ -71,7 +71,7 @@ Xiaoxiao Agent 是一个独立开发的多模型桌面工作空间。打开本�
 | **计划任务** | 应用运行时按每天或每周执行只读任务，结果归档到新会话 |
 | **附件与网页** | 每条消息最多引用四份文本资料，任务可读取公共 HTTPS 网页 |
 | **视觉实验室** | 直接测试 PNG、JPG、WebP 与 MP4、MOV、WebM。视频均匀抽取 6 帧并交给视觉模型，不包含音频 |
-| **创作中心** | 从独立工作区生成图片、视频和语音，选择已配置模型，预览结果并保存文件。兼容 OpenAI 风格接口，可按服务自定义 endpoint |
+| **创作中心** | 从独立工作区生成图片、视频和语音，选择已配置模型，预览结果并保存文件。生图支持同会话内跨轮对比。兼容 OpenAI 风格接口，可按服务自定义 endpoint |
 | **MCP 扩展** | stdio 与 Streamable HTTP，自动发现工具 |
 | **品牌定制** | 自有应用名称、图标、安装包标识与界面 |
 | **密钥保护** | API Key 与 MCP env/header 值经系统加密保存 |

@@ -953,3 +953,19 @@ body:has(#generationStudio:not([hidden])) > :is(.main, #sidebar, #toggleSidebar)
   .generation-history-label { margin-top: 15px; }
   .generation-sidebar-footer { gap: 3px; padding-top: 6px; }
 }
+
+.gallery-mode, #gallerySwap { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.gallery-mode { color: var(--accent); border-color: var(--line); }
+.gallery-mode[aria-pressed="true"] { border-color: var(--control-line); background: var(--accent-soft); }
+.gallery-mode .ui-icon, #gallerySwap .ui-icon { width: 15px; height: 15px; }
+#gallerySwap { margin-inline-start: auto; flex: none; }
+.gallery-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 0; gap: 12px; padding: 16px; background: var(--scene-paint); }
+.gallery-pane { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.gallery-pane header, .gallery-pane label { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gallery-pane header { justify-content: space-between; margin-bottom: 10px; }
+.gallery-side { color: var(--muted); white-space: nowrap; font-size: 13px; }
+.gallery-pane select { min-width: 0; max-width: 100%; min-height: 34px; padding-inline: 8px; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--subtle); font-size: 13px; }
+.gallery-canvas { display: grid; place-items: center; position: relative; min-height: 0; border-radius: 7px; background: var(--subtle); overflow: hidden; }
+.gallery-canvas img { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: contain; }
+.gallery-load { color: var(--muted); font-size: 13px; }
+.gallery-prompt { margin: 10px 2px 0; max-height: 4.5em; overflow: auto; overflow-wrap: anywhere; font-size: 13px; }

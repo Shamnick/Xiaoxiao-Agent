@@ -814,16 +814,27 @@
       <h2 id="creationGalleryTitle">图片预览</h2>
       <span id="galleryPosition" role="status"></span>
       <div class="gallery-tools">
+        <button id="galleryCompare" class="gallery-mode" type="button" aria-pressed="false" hidden><span class="ui-icon i-split" aria-hidden="true"></span>版本对比</button>
         <button id="galleryScale" class="quiet" type="button" aria-pressed="false">原始尺寸</button>
         <button id="gallerySave" class="icon-button" type="button" title="导出当前图片" aria-label="导出当前图片"><span class="ui-icon i-download" aria-hidden="true"></span></button>
         <button id="galleryClose" class="icon-button" type="button" title="关闭预览" aria-label="关闭预览"><span class="ui-icon i-close" aria-hidden="true"></span></button>
       </div>
     </header>
     <div id="galleryViewport" class="gallery-viewport"><img id="galleryImage" alt=""></div>
+    <div id="galleryPair" class="gallery-pair" hidden></div>
+    <template id="galleryPaneTemplate">
+      <section class="gallery-pane">
+        <header><label><span class="gallery-side"></span><select></select></label>
+          <button class="icon-button" type="button"><span class="ui-icon i-download" aria-hidden="true"></span></button>
+        </header>
+        <div class="gallery-canvas"><img alt="" hidden><span class="gallery-load" role="status"></span></div>
+        <p class="gallery-prompt"></p>
+      </section>
+    </template>
     <footer class="gallery-footer"><p id="galleryCaption"></p><div id="galleryNavigation">
       <button id="galleryPrevious" class="icon-button" type="button" title="上一张" aria-label="上一张"><span class="ui-icon i-chevron" aria-hidden="true"></span></button>
       <button id="galleryNext" class="icon-button" type="button" title="下一张" aria-label="下一张"><span class="ui-icon i-chevron" aria-hidden="true"></span></button>
-    </div></footer>
+    </div><button id="gallerySwap" class="quiet" type="button" hidden><span class="ui-icon i-compare" aria-hidden="true"></span>交换左右</button></footer>
   </dialog>
   <script src="../node_modules/marked/lib/marked.umd.js"></script>
   <script src="../node_modules/dompurify/dist/purify.min.js"></script>
@@ -849,6 +860,7 @@
   <script src="renderer.js"></script>
   <script src="renderer-media.js"></script>
   <script src="renderer-generation.js"></script>
+  <script src="renderer-gallery.js"></script>
   <script src="renderer-schedules.js"></script>
   <script src="renderer-proof-poster.js"></script>
   <script src="renderer-proof-studio.js"></script>

@@ -11,11 +11,57 @@ const { Store } = require('../src/store');
 
 const root = path.resolve(__dirname, '..');
 const qa = process.env.XIAOXIAO_SMOKE_QA_DIR;
-const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0ioAAAAASUVORK5CYII=';
+// Distinct, lossless test images made in the renderer; no remote media calls.
+async function seascapeFixtures(page) {
+  return page.evaluate(() => [
+    ['#344f73', '#aacddb', '#f4e7cd', '#5e8599'],
+    ['#4f4a75', '#e2a688', '#ffe0a3', '#7e758a'],
+    ['#353e63', '#bd93aa', '#ffceb4', '#706c91']
+  ].map(([sky, horizon, light, sea], i) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 560;
+    canvas.height = 440;
+    const ctx = canvas.getContext('2d');
+    const fill = (top, bottom, y1, y2) => {
+      const gradient = ctx.createLinearGradient(0, y1, 0, y2);
+      gradient.addColorStop(0, top);
+      gradient.addColorStop(1, bottom);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, y1, 560, y2 - y1);
+    };
+    fill(sky, horizon, 0, 260);
+    ctx.fillStyle = light;
+    ctx.beginPath();
+    ctx.arc(345 + i * 42, 130 + i * 31, 34, 0, Math.PI * 2);
+    ctx.fill();
+    for (let layer = 0; layer < 3; layer++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 260);
+      for (let x = 0; x <= 560; x += 2) {
+        const y = 190 + 20 * layer + 27 * Math.sin(x / 129 + layer + i / 3) + 8 * Math.cos(x / 46 + layer);
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(560, 260);
+      ctx.fillStyle = sky;
+      ctx.globalAlpha = .28 + layer * .22;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    fill(horizon, sea, 260, 440);
+    for (let y = 262; y < 440; y += 2) {
+      const offset = 345 + i * 42 + 11 * Math.sin(y * 1.4);
+      const width = 7 + (y - 260) * .22 * (.6 + .4 * Math.cos(y / 2));
+      ctx.fillStyle = light;
+      ctx.globalAlpha = .5 - (y - 260) / 450;
+      ctx.fillRect(offset - width, y, width * 2, 1);
+    }
+    return canvas.toDataURL('image/png').split(',')[1];
+  }));
+}
 
 async function run() {
   const data = await fs.mkdtemp(path.join(os.tmpdir(), 'xiaoxiao-generation-smoke-'));
-  let app;
+  let app, png, variants;
   const requests = [];
   const imagePrompts = [], videoPrompts = [];
   const server = createServer(async (req, res) => {
@@ -31,7 +77,7 @@ async function run() {
         }
         if (body.n === 2) {
           res.writeHead(200, { 'content-type': 'application/json' });
-          return res.end(JSON.stringify({ data: [{ b64_json: png }, { b64_json: png }] }));
+          return res.end(JSON.stringify({ data: variants.map(b64_json => ({ b64_json })) }));
         }
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify({ data: [{ b64_json: png }] }));
@@ -72,6 +118,7 @@ async function run() {
       env: { ...process.env, XIAOXIAO_SMOKE_DIR: data }
     });
     const page = await app.firstWindow();
+    [png, ...variants] = await seascapeFixtures(page);
     await enterWorkspace(page);
     page.setDefaultTimeout(10000);
     const errors = [];
@@ -116,7 +163,7 @@ async function run() {
     await page.locator('#runGeneration').click();
     await page.locator('.generation-result').waitFor();
     assert.equal(await page.locator('.generation-result').getAttribute('alt'), '生成的图片 1');
-    assert.equal(await page.locator('.generation-result').evaluate(image => image.naturalWidth), 1);
+    assert.equal(await page.locator('.generation-result').evaluate(image => image.naturalWidth), 560);
     await page.screenshot({ path: path.join(data, 'generation-image.png') });
 
     const saved = path.join(data, 'generated-image.png');
@@ -140,9 +187,59 @@ async function run() {
     assert.equal(await page.locator('#galleryImage').getAttribute('alt'), '生成的图片 2');
     assert(await page.locator('#galleryNext').isDisabled());
     await page.locator('#galleryScale').click();
-    assert.equal(await page.locator('#galleryImage').evaluate(image => image.clientWidth), 1);
+    assert.equal(await page.locator('#galleryImage').evaluate(image => image.clientWidth), 560);
     await page.locator('#gallerySave').click();
     await page.getByText('图片已导出', { exact: true }).waitFor();
+    assert.equal((await fs.readFile(saved)).toString('base64'), variants[1]);
+    const compare = page.getByRole('button', { name: '版本对比' });
+    await compare.press('Enter');
+    const left = page.getByRole('region', { name: '左图' });
+    const right = page.getByRole('region', { name: '右图' });
+    const leftMenu = left.getByRole('combobox');
+    const rightMenu = right.getByRole('combobox');
+    async function verifySide(pane, label, bytes) {
+      const choice = pane.getByRole('combobox');
+      assert.equal(await choice.inputValue(), label);
+      const image = pane.getByRole('img');
+      await image.waitFor();
+      assert.equal(await image.evaluate(img => img.src.split(',')[1]), bytes);
+    }
+    await verifySide(left, '第 1 轮 · 图 1', png);
+    await verifySide(right, '第 2 轮 · 图 2', variants[1]);
+    assert.equal(await leftMenu.locator('option').count(), 3);
+    assert(await leftMenu.locator('option').nth(2).isDisabled());
+    await rightMenu.focus();
+    // Native select popups differ on macOS and Linux. Check the gallery leaves
+    // their arrow keys alone, then choose an option through the native control.
+    assert(await rightMenu.evaluate(el => el.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'ArrowLeft', bubbles: true, cancelable: true
+    }))));
+    await rightMenu.selectOption({ index: 1 });
+    await verifySide(right, '第 2 轮 · 图 1', variants[0]);
+    await rightMenu.press('Tab');
+    await page.waitForFunction(() => document.activeElement.getAttribute('aria-label') === '导出右图原件');
+    assert.equal(await left.locator('p').textContent(), '一个玻璃质感的海面');
+    assert.equal(await right.locator('p').textContent(), '光线改成黄昏，两张构图');
+    if (qa) {
+      await page.mouse.move(0, 0);
+      await page.locator('#creationGallery').screenshot({path:path.join(qa, 'image-comparison-light.png'), scale:'css', animations:'disabled'});
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(900, 600));
+      await page.locator('#creationGallery').screenshot({path:path.join(qa, 'image-comparison-dark.png'), scale:'css', animations:'disabled'});
+      await page.emulateMedia({ colorScheme: 'light' });
+      await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(1320, 860));
+    }
+    await page.getByRole('button', { name: '交换左右' }).press('Enter');
+    await verifySide(left, '第 2 轮 · 图 1', variants[0]);
+    await verifySide(right, '第 1 轮 · 图 1', png);
+    for (const [pane, side, bytes] of [[left, '左', variants[0]], [right, '右', png]]) {
+      await pane.getByRole('button', { name: '导出' + side + '图原件' }).click();
+      await page.getByText(side + '图已导出', { exact: true }).waitFor();
+      assert.equal((await fs.readFile(saved)).toString('base64'), bytes);
+    }
+    await compare.click();
+    assert.equal(await page.locator('#galleryPosition').textContent(), '2 / 2');
+    await compare.press('Enter');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.getElementById('creationGallery').open && document.activeElement.getAttribute('aria-label') === '查看第 2 张大图');
     const exportDirectory = path.join(data, 'batch-export');
@@ -200,21 +297,44 @@ async function run() {
     assert.equal(await imageField.inputValue(), '未发出的草稿');
     await page.locator('#generationNew').click();
     assert.equal(await page.locator('.creation-turn').count(), 0);
+    await page.locator('#generationImageCount').selectOption('1');
     await imageField.fill('模拟失败');
     await page.locator('#runGeneration').click();
     await page.locator('.creation-turn[data-state=failed]').waitFor();
     await page.getByRole('button', {name:'重新生成这一轮'}).click();
     await page.locator('.creation-turn').nth(1).locator('img').first().waitFor();
     assert.equal(imagePrompts.at(-1), '模拟失败');
+    await page.locator('.creation-thumbnail').first().click();
+    await page.locator('#creationGallery[open]').waitFor();
+    assert(await compare.isHidden());
+    await page.keyboard.press('Escape');
     await history.filter({hasText:'一个玻璃质感的海面'}).click();
     assert.equal(await imageField.inputValue(), '未发出的草稿');
     assert.equal(await page.locator('.creation-turn').count(), 4);
+    // Simulate a pre-0.6.10 record, then reopen with the first turn offscreen.
+    const legacyId = await first.locator('.creation-preview').getAttribute('data-id');
+    await page.evaluate(async id => {
+      await archiveOperation('readwrite', records => {
+        const request = records.get(id);
+        request.onsuccess = () => {
+          const row = request.result;
+          delete row.imageIndices;
+          records.put(row);
+        };
+      });
+    }, legacyId);
     await page.reload();
     await enterWorkspace(page);
     await page.locator('#openGenerationStudio').click();
     await history.filter({hasText:'一个玻璃质感的海面'}).click();
     await page.locator('.creation-turn').last().locator('img').waitFor();
     assert.equal(await page.locator('.creation-question').count(), 4);
+    await page.locator('.creation-turn').last().locator('.creation-thumbnail').click();
+    await compare.click();
+    await leftMenu.selectOption({ index: 0 });
+    await verifySide(left, '第 1 轮 · 图 1', png);
+    assert.equal(await rightMenu.locator('option').count(), 5);
+    await page.keyboard.press('Escape');
     assert.equal(await history.count(), 4);
     assert.equal(await imageField.inputValue(), '未发出的草稿');
     await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(900, 600));
@@ -250,7 +370,7 @@ async function run() {
     await page.locator('#generationFocus').click();
     assert(await page.locator('#creationInspector').isVisible());
     assert.deepEqual(errors, []);
-    console.log('PASS: Image, asynchronous video, and speech generation, result previews, and generated-file export.');
+    console.log('PASS: Image, video and speech generation, cross-round image comparison, keyboard navigation, scoped history and original-file exports.');
   } finally {
     if (app) await app.close();
     server.closeAllConnections();

@@ -372,6 +372,10 @@ function renderGenerationResult() {
   if (follow) output.scrollTop = output.scrollHeight;
 }
 
+function creationImageIndices(assets) {
+  return (assets || []).flatMap((asset, index) => asset?.mimeType?.startsWith('image/') && asset.data ? [index] : []);
+}
+
 function readAssets(id) {
   return unsavedAssets.get(id) || archiveOperation('readonly', (_, media) => media.get(id));
 }
@@ -430,60 +434,6 @@ function renderAssets(output, assets) {
     output.append(element);
   }
 }
-
-let galleryImages = [];
-let galleryIndex = 0;
-function showGalleryImage(index) {
-  if (!galleryImages[index]) return;
-  galleryIndex = index;
-  const image = galleryImages[index].querySelector('img');
-  $('galleryImage').src = image.src;
-  $('galleryImage').alt = image.alt;
-  $('galleryScale').setAttribute('aria-pressed', 'false');
-  $('galleryViewport').classList.remove('original-size');
-  $('galleryViewport').scrollTo(0, 0);
-  $('galleryPosition').textContent = `${index + 1} / ${galleryImages.length}`;
-  $('galleryNavigation').hidden = galleryImages.length < 2;
-  $('galleryPrevious').disabled = index === 0;
-  $('galleryNext').disabled = index === galleryImages.length - 1;
-}
-
-function openCreationGallery(output, trigger) {
-  galleryImages = [...output.querySelectorAll('.creation-thumbnail')];
-  $('galleryCaption').textContent = output.closest('.creation-turn').querySelector('.creation-question').textContent;
-  showGalleryImage(galleryImages.indexOf(trigger));
-  $('creationGallery').showModal();
-  $('galleryClose').focus();
-}
-
-$('galleryClose').onclick = () => $('creationGallery').close();
-$('galleryPrevious').onclick = () => showGalleryImage(galleryIndex - 1);
-$('galleryNext').onclick = () => showGalleryImage(galleryIndex + 1);
-$('creationGallery').addEventListener('keydown', event => {
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    event.preventDefault();
-    showGalleryImage(galleryIndex + (event.key === 'ArrowLeft' ? -1 : 1));
-  }
-});
-$('galleryScale').onclick = () => {
-  const original = $('galleryViewport').classList.toggle('original-size');
-  $('galleryScale').setAttribute('aria-pressed', String(original));
-  $('galleryViewport').scrollTo(0, 0);
-};
-$('gallerySave').onclick = async () => {
-  const thumb = galleryImages[galleryIndex];
-  const id = thumb.closest('.creation-preview').dataset.id;
-  const index = Number(thumb.dataset.assetIndex);
-  try {
-    const assets = await readAssets(id);
-    if (await api.generation.save({ ...assets[index], kind: 'image' })) $('galleryPosition').textContent = '图片已导出';
-  } catch (error) { $('galleryPosition').textContent = errorMessage(error); }
-};
-$('creationGallery').addEventListener('close', () => {
-  galleryImages[galleryIndex]?.focus({ preventScroll: true });
-  galleryImages = [];
-  $('galleryImage').removeAttribute('src');
-});
 
 function updateGenerationComposer() {
   const prompt = generationPromptElement();
@@ -818,6 +768,7 @@ function contextualPrompt(item) {
 async function finishCreation(item, state, status, result) {
   const assets = result && (result.assets || [result]);
   const completed = { ...item, state, status };
+  if (item.kind === 'image' && assets) completed.imageIndices = creationImageIndices(assets);
   try {
     await archiveOperation('readwrite', (records, media) => {
       records.put(completed);
