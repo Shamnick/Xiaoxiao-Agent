@@ -191,7 +191,7 @@ npm run dist:mac       # 生成 arm64 DMG
 
 桌面测试在隔离的临时数据目录运行，使用本地模拟模型 API。回归覆盖代码建议与撤销、审批写入和恢复、Git 分支与暂存审查、本机网页预览、真实 PTY 终端、会话恢复、技能导入和文档导出。MCP 测试包含实际 stdio 握手和进程清理。
 
-本地 arm64 构建使用临时签名。商业发布需要 Developer ID 签名、公证和目标平台验证。
+本地 arm64 构建使用临时签名。正式分发可用 `npm run release:mac -- --check` 检查发布机配置，用 `npm run release:mac` 签名、提交 Apple 公证并从最终 DMG 运行桌面回归。[Mac 发布说明](docs/usage.md#正式分发-mac-安装包)
 
 ### 项目结构
 

@@ -227,6 +227,14 @@ npm run dist:mac
 
 electron-builder.yml 控制安装包名称、App ID、平台和签名设置。当前已验证 macOS arm64；Windows/Linux 目标需要在对应平台构建并验证，不能视为已经发布。
 
+## 正式分发 Mac 安装包
+
+在装有项目依赖的 Apple Silicon Mac 上，将有效的 Developer ID Application 证书和对应私钥保存在钥匙串中。用 `xcrun notarytool store-credentials` 交互式保存公证凭据，将配置名称赋给环境变量 `APPLE_KEYCHAIN_PROFILE`。使用自定义钥匙串时，通过 `APPLE_KEYCHAIN` 指定公证凭据所在的位置。多个发布证书共存时，可用 `XIAOXIAO_SIGN_SHA1` 指定证书指纹。
+
+1. 运行 `npm run release:mac -- --check`。命令在本机检查签名身份、工具和配置名称。凭据的有效性由 Apple 在公证请求中验证。
+2. 运行 `npm run release:mac`。脚本构建 arm64 应用和签名 DMG，向 Apple 提交 DMG，并等待公证结果。通过后附加票据并验证系统对磁盘映像的评估结果。
+3. 脚本只读挂载最终 DMG，校验其中的应用签名和系统启动评估，用临时数据目录运行创作中心与局部改稿回归。成功后终端给出分发文件路径。请使用该路径下的 DMG 做干净设备首次安装和旧版升级验收。
+
 ## 验证
 
 ~~~bash

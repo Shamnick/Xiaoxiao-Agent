@@ -18,7 +18,8 @@
     "predist:mac": "npm run build:renderer",
     "pretest:desktop": "npm run build:renderer",
     "prescreenshots": "npm run build:renderer",
-    "build:renderer": "node scripts/build-renderer.cjs"
+    "build:renderer": "node scripts/build-renderer.cjs",
+    "release:mac": "node scripts/release-mac.cjs"
   },
   "devDependencies": {
     "@codemirror/commands": "6.11.1",
