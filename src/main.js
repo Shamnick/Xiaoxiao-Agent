@@ -381,7 +381,8 @@ handle('proof:preview', async (sender, input) => {
   if (!['title', 'voice', 'body'].includes(input.target) || typeof input.instruction !== 'string' ||
       !input.instruction.trim() || input.instruction.length > 240) throw Error('请选择文案并输入修改要求');
   if (mask(input.instruction) !== input.instruction || mask(version.current[input.target]) !== version.current[input.target]) throw Error('请先从文案和要求中移除密钥');
-  proofRequests.get(sender.id)?.abort();
+  const pending = proofRequests.get(sender.id);
+  if (pending && !pending.signal.aborted) throw Error('正在生成提案，请等待或停止本次预览');
   const controller = new AbortController();
   proofRequests.set(sender.id, controller);
   try {

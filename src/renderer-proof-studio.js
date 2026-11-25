@@ -78,7 +78,7 @@
 
   async function preview() {
     const input = el('proofPrompt').value.trim();
-    if (!session || saving) return;
+    if (!session || saving || draft || previewTurn !== undefined) return;
     if (!input) {
       status('写下“口语一点”“短一点”，或用“改成：”输入自己的文案。');
       focusAction('proofPrompt');
@@ -94,14 +94,21 @@
     let text;
     if (el('proofModel').value) {
       const turn = ++generation;
-      previewTurn = turn;
+      const submittedWithButton = document.activeElement === el('proofPreview');
+      setPreviewTurn(turn);
+      if (submittedWithButton) focusAction('proofStopPreview');
       status('正在为选中文案生成提案…');
       try {
         text = await api.preview({ ...scope, brief: el('proofBrief').value, base: session.id, target,
           instruction: input, providerId: el('proofModel').value });
         if (turn !== generation) return;
-      } catch (error) { if (turn === generation) status(errorMessage(error)); return; }
-      finally { if (previewTurn === turn) previewTurn = undefined; }
+      } catch (error) {
+        if (turn === generation) {
+          status(errorMessage(error));
+          if (document.activeElement === el('proofStopPreview')) focusAction('proofPrompt');
+        }
+        return;
+      } finally { if (previewTurn === turn) setPreviewTurn(undefined); }
     } else if (literal) text = literal[1].trim();
     else if (target !== 'body' && /口语|自然|随意/.test(input)) text = session.brief.casual;
     else if (target !== 'body' && /短|简洁|精简/.test(input)) text = session.brief.short;
@@ -152,9 +159,18 @@
     cancelModelPreview();
     void commit({ operation: 'undo', base: session.id }, '已撤销上一步。', target || 'title');
   }
+  function setPreviewTurn(turn) {
+    previewTurn = turn;
+    const busy = turn !== undefined;
+    el('proofForm').setAttribute('aria-busy', String(busy));
+    el('proofPreview').disabled = busy;
+    el('proofStopPreview').hidden = !busy;
+    el('proofDictate').hidden = busy;
+    el('proofExport').disabled = busy || !session || saving || Boolean(draft);
+  }
   function cancelModelPreview() {
     if (previewTurn === undefined) return;
-    previewTurn = undefined;
+    setPreviewTurn(undefined);
     void api.cancel().catch(() => {});
   }
   function invalidatePreview() {
@@ -163,6 +179,12 @@
     cancelModelPreview();
     status();
   }
+  el('proofStopPreview').onclick = () => {
+    if (previewTurn === undefined) return;
+    invalidatePreview();
+    status('已停止本次预览，修改要求已保留。');
+    focusAction('proofPrompt');
+  };
   el('proofPrompt').oninput = invalidatePreview;
   el('proofModel').onchange = invalidatePreview;
 

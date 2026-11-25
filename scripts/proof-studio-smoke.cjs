@@ -15,14 +15,17 @@ const { _electron: electron } = require('playwright');
   const calls = [];
   const slowRequest = Promise.withResolvers();
   const slowAborted = Promise.withResolvers();
+  const retryRequest = Promise.withResolvers();
+  const retryAborted = Promise.withResolvers();
   const server = http.createServer(async (req, res) => {
     let raw = '';
     for await (const chunk of req) raw += chunk;
     const body = JSON.parse(raw);
     calls.push({url:req.url,body});
-    if (calls.length === 2) {
-      slowRequest.resolve();
-      res.once('close',() => slowAborted.resolve());
+    if (calls.length === 2 || calls.length === 3) {
+      const [received, closed] = calls.length === 2 ? [slowRequest, slowAborted] : [retryRequest, retryAborted];
+      received.resolve();
+      res.once('close', () => closed.resolve());
       return;
     }
     res.writeHead(200,{'content-type':'application/json'}).end(JSON.stringify({
@@ -169,8 +172,27 @@ const { _electron: electron } = require('playwright');
     await node('proofPreview').click();
     const deadline = promise => Promise.race([promise,delay(9000,null,{ref:false}).then(()=>{throw Error('选区请求超时');})]);
     await deadline(slowRequest.promise);
-    await node('proofBodyObject').click();
+    await node('proofPrompt').press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+    assert(await node('proofPreview').isDisabled(), 'A pending preview must disable duplicate submission');
+    assert.equal(await node('proofForm').getAttribute('aria-busy'), 'true');
+    // Exercise the IPC guard independently of the disabled form.
+    await assert.rejects(page.evaluate(async () => {
+      const proof = window.nova.proof;
+      const base = (await proof.read({brief:'invite'})).id;
+      return proof.preview({brief:'invite', base, target:'voice', instruction:'重复提交', providerId:'fixture'});
+    }), /正在生成提案/);
+    await node('proofStopPreview').click();
     await deadline(slowAborted.promise);
+    await focus('proofPrompt');
+    assert.equal(await node('proofPrompt').inputValue(), '改得更亲切');
+    assert.equal(await text('proofVoiceObject'), '周五来工作室看看。');
+    assert(await node('proofCompare').isHidden());
+    assert.equal(await node('proofForm').getAttribute('aria-busy'), 'false');
+    assert.equal(calls.length, 2, 'Only one HTTP request for the pending preview');
+    await node('proofPreview').click();
+    await deadline(retryRequest.promise);
+    await node('proofBodyObject').click();
+    await deadline(retryAborted.promise);
     assert(await node('proofCompare').isHidden());
     assert.equal(await text('proofTarget'),'修改海报正文');
     await node('proofVoiceObject').click();
@@ -204,7 +226,7 @@ const { _electron: electron } = require('playwright');
     assert.equal(check[1],'只在分支更新');
     assert.deepEqual(errors, []);
     assert.deepEqual(network, []);
-    assert.equal(calls.length,2);
+    assert.equal(calls.length,3);
     console.log('PASS: PNG preview, export, cancel, unchanged artwork pixels, byte-identical rollback, scoped edits, branch, restart, model cancellation and narration.');
   } finally {
     try { await app?.close(); } finally { server.closeAllConnections(); server.close(); await fs.rm(data, { recursive: true, force: true }); }
