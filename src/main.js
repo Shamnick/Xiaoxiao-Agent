@@ -3,12 +3,15 @@ const path=require('node:path'),fs=require('node:fs'),{randomUUID,createHash}=re
 const { workspaceGuidance, withGuidance } = require('./workspace-guidance');
 const { MAX_PARTIAL, beginCheckpoint, recordTool, failRun, resumeContext } = require('./run-recovery');
 const {Store}=require('./store');
+const proof = require('./proof-versions');
+const proofRequests = new Map();
 const { emptyMetrics, applyMetric } = require('./conversation-metrics');
 const { taskPlanTool, taskDraftTool, taskDrafts } = require('./task-plan');
 const { waitForUser, questionTool } = require('./task-interaction');
 const { parallelAnalysisTool } = require('./task-analysis');
 const {config,runAgent,analyzeMedia,visualContent,models}=require('./providers');
-const { generateAsset } = require('./generation');
+const { generateAsset, pollVideo } = require('./generation');
+const { synthesizeLocalSpeech } = require('./local-speech');
 const { createArtifactTool } = require('./artifacts');
 const { checkConnection, saveReport } = require('./connection-report');
 const { mask } = require('./connection-intent');
@@ -173,18 +176,57 @@ handle('media:cancel', (sender, requestId) => {
   const request = mediaRequests.get(sender.id);
   if (request?.id === requestId) request.controller.abort();
 });
+function videoReceipts() { return store.read('video-receipts', {}); }
+function rememberVideo(id, record) {
+  const rows = videoReceipts();
+  if (record) rows[id] = record;
+  else delete rows[id];
+  store.write('video-receipts', rows);
+}
+handle('generation:receipts', () => Object.fromEntries(Object.entries(videoReceipts())
+  .map(([id, row]) => [id, row.remoteId ? 'accepted' : 'unknown'])));
+handle('generation:forget', (_, ids) => {
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(id))) throw Error('任务记录无效');
+  if (!ids.length) return;
+  const rows = videoReceipts();
+  for (const id of ids) delete rows[id];
+  store.write('video-receipts', rows);
+});
 handle('generation:run', async (sender, input) => {
   if (!input || typeof input.requestId !== 'string' || !/^[a-f0-9-]{36}$/.test(input.requestId)) throw Error('生成请求无效');
   const controller = new AbortController();
-  generationRequests.get(sender.id)?.controller.abort();
+  if (generationRequests.has(sender.id)) throw Error('请等当前媒体请求结束');
   const request = { id: input.requestId, controller };
+  const options = {
+    signal: AbortSignal.any([controller.signal, AbortSignal.timeout(11 * 60 * 1000)]),
+    onStatus: event => {
+      if (generationRequests.get(sender.id) === request && !sender.isDestroyed()) sender.send('generation:event', { ...event, requestId: input.requestId });
+    }
+  };
   generationRequests.set(sender.id, request);
   try {
-    return await generateAsset(provider(input.providerId), input, {
-      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(11 * 60 * 1000)]),
-      onStatus: event => {
-        if (generationRequests.get(sender.id) === request && !sender.isDestroyed()) sender.send('generation:event', { ...event, requestId: input.requestId });
-      }
+    if (input.kind === 'audio' && input.providerId === 'macos-system-speech') {
+      options.onStatus({phase:'synthesize',text:'正在本机合成旁白…'});
+      return await synthesizeLocalSpeech(input,options.signal);
+    }
+    const p = provider(input.providerId);
+    if (input.kind !== 'video') return await generateAsset(p, input, options);
+    // Receipts contain only a connection fingerprint, routing paths and the remote ID.
+    const connection = createHash('sha256').update(JSON.stringify([p.baseUrl,input.providerId,p.model])).digest('hex');
+    const prior = videoReceipts()[request.id];
+    if (input.resume === true) {
+      if (!prior?.remoteId) throw Error('尚未取得可查询的任务号');
+      if (connection !== prior.connection) throw Error('原连接已更改，请先恢复原模型和地址');
+      return await pollVideo(p, prior.routes, prior.remoteId, options);
+    }
+    if (prior) throw Error('已有提交记录，请查询原任务');
+    const routes = { endpoint: input.endpoint, pollEndpoint: input.pollEndpoint, contentEndpoint: input.contentEndpoint };
+    if (Object.values(routes).some(route => route && (typeof route !== 'string' || /[?#]/.test(route) || mask(route) !== route))) throw Error('请移除接口路径中的查询参数和密钥');
+    const record = { connection, routes };
+    return await generateAsset(p, input, {
+      ...options,
+      onSubmit: () => rememberVideo(request.id, record),
+      onVideoId: remoteId => rememberVideo(request.id, { ...record, remoteId })
     });
   } finally {
     if (generationRequests.get(sender.id) === request) generationRequests.delete(sender.id);
@@ -311,12 +353,50 @@ handle('skills:import', async sender => {
 });
 handle('skills:save', (_, raw) => saveSkill(store, raw));
 handle('skills:delete', (_, id) => store.write('skills', store.read('skills', []).filter(skill => skill.id !== id)));
+function proofShelf(projectId) {
+  return projectId ? 'proof-project-' + project(projectId).id : 'proof-home';
+}
+function proofBook(scope) {
+  return scope.conversationId ? conversation(scope.conversationId).proofBook : store.read(proofShelf(scope.projectId), {});
+}
+handle('proof:read', (_, input) => proof.snapshot(proofBook(input), input.brief));
+handle('proof:change', (_, input) => {
+  const c = input.conversationId ? conversation(input.conversationId) : null;
+  if (c) idle(c.id);
+  const book = proof.change(c ? c.proofBook : proofBook(input), input, c?.messages.length || 0);
+  if (c) persist({ ...c, proofBook: book });
+  else store.write(proofShelf(input.projectId), book);
+  return proof.snapshot(book, input.brief);
+});
+handle('proof:preview', async (sender, input) => {
+  const version = proof.snapshot(proofBook(input), input.brief);
+  if (version.id !== input.base) throw Error('作品已更新，请重新打开简报');
+  if (!['title', 'voice', 'body'].includes(input.target) || typeof input.instruction !== 'string' ||
+      !input.instruction.trim() || input.instruction.length > 240) throw Error('请选择文案并输入修改要求');
+  if (mask(input.instruction) !== input.instruction || mask(version.current[input.target]) !== version.current[input.target]) throw Error('请先从文案和要求中移除密钥');
+  proofRequests.get(sender.id)?.abort();
+  const controller = new AbortController();
+  proofRequests.set(sender.id, controller);
+  try {
+    const prompt = JSON.stringify({ target: input.target, selected: version.current[input.target], instruction: input.instruction });
+    const replacement = await runAgent(provider(input.providerId), [{ role: 'user', content: prompt }], {
+      system: 'Rewrite only the selected copy according to the instruction. Return only the proposed replacement, in the same language unless requested. Limit 1000 characters.',
+      tools: [], maxSteps: 1, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60000)])
+    });
+    const text = replacement.trim();
+    if (!text || text.length > 1000 || mask(text) !== text) throw Error('模型提案无效，请缩短要求后重试');
+    return text;
+  } finally { if (proofRequests.get(sender.id) === controller) proofRequests.delete(sender.id); }
+});
+handle('proof:cancel', sender => proofRequests.get(sender.id)?.abort());
 handle('conversations:list',()=>all().sort((a,b)=>b.updatedAt-a.updatedAt));
 function createConversation(arg = {}) {
   const rows=all();if(rows.length>=1000)throw Error('会话超过 1000 个，请删除旧会话');
   const c={id:randomUUID(),title:String(arg.title||'新对话').slice(0,100),providerId:arg.providerId||'',workspace:'',messages:[],systemPrompt:'',agent:Boolean(arg.scheduleId),updatedAt:Date.now()};
   if (arg.projectId) c.projectId = project(arg.projectId).id;
   if (arg.scheduleId) c.scheduleId = arg.scheduleId;
+  const inherited = store.read(proofShelf(c.projectId), {});
+  if (Object.keys(inherited).length) c.proofBook = inherited;
   store.write('conversations',[c,...rows]);return c;
 }
 handle('conversations:create', (_, arg = {}) => createConversation({ title: arg.title, providerId: arg.providerId, projectId: arg.projectId }));
@@ -422,6 +502,7 @@ handle('conversations:branch', (_, { id, through, before }) => {
     systemPrompt: source.systemPrompt || '', agent: Boolean(source.agent), planOnly: Boolean(source.planOnly || source.scheduleId),
     skillIds: source.skillIds || [], messages, updatedAt: Date.now()
   };
+  if (source.proofBook) branch.proofBook = proof.branchAt(source.proofBook, cutoff);
   if (before !== undefined) {
     const sourceId = source.revision?.index === before ? source.revision.sourceId : source.id;
     branch.revision = { sourceId, index: before, createdAt: branch.updatedAt };
@@ -1135,7 +1216,7 @@ function createWindow(){
   });
   win.webContents.on('render-process-gone', () => { terminals.closeOwner(id); codeRequests.get(id)?.controller.abort(); });
   mainWindow = win;
-  win.on('closed', () => { attachments.delete(id); searches.get(id)?.abort(); codeRequests.get(id)?.controller.abort(); mediaRequests.get(id)?.controller.abort(); generationRequests.get(id)?.controller.abort(); terminals.closeOwner(id); if (mainWindow === win) mainWindow = null; });
+  win.on('closed', () => { proofRequests.get(id)?.abort(); attachments.delete(id); searches.get(id)?.abort(); codeRequests.get(id)?.controller.abort(); mediaRequests.get(id)?.controller.abort(); generationRequests.get(id)?.controller.abort(); terminals.closeOwner(id); if (mainWindow === win) mainWindow = null; });
   win.loadFile(page);
   return win;
 }

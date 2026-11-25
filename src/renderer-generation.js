@@ -27,6 +27,10 @@ const generationPlaceholders = {
   audio: '输入想听到的文字…'
 };
 const generationStorageKey = 'xiaoxiao-generation-history-v1';
+const localVoiceId = 'macos-system-speech';
+function isLocalVoice(kind, providerId) {
+  return api.platform === 'darwin' && kind === 'audio' && providerId === localVoiceId;
+}
 const generationPresets = {
   image: [
     ['产品摄影', '产品摄影，主体清晰，柔和棚拍光线，细腻材质，背景简洁，商业广告质感'],
@@ -84,10 +88,20 @@ let historyLoaded = false;
   }
   generationHistory = await archiveOperation('readonly', records => records.getAll());
   generationHistory.sort((a, b) => b.createdAt - a.createdAt);
+  const receipts = await api.generation.receipts();
+  const delivered = generationHistory.filter(row => row.state === 'done' && receipts[row.id]);
+  if (delivered.length) await api.generation.forget(delivered.map(row => row.id));
   for (const row of generationHistory) {
-    if (['running', 'queued'].includes(row.state)) {
+    if (row.state !== 'done' && receipts[row.id]) {
+      row.receipt = receipts[row.id];
       row.state = 'stopped';
-      row.status = '上次生成已中断，可以重新生成。';
+      row.status = videoRecoveryText(row);
+      await archiveOperation('readwrite', records => records.put(row));
+    } else if (['running', 'queued'].includes(row.state)) {
+      if (row.kind === 'video' && row.state === 'running' && !row.tracksSubmission) row.receipt = 'unknown';
+      row.status = row.receipt ? videoRecoveryText(row) : row.state === 'queued' || row.tracksSubmission
+        ? '任务尚未提交，可重新生成。' : '上次生成已中断，可以重新生成。';
+      row.state = 'stopped';
       await archiveOperation('readwrite', records => records.put(row));
     }
   }
@@ -276,8 +290,9 @@ function fillGenerationModels(rows) {
     const draftModel = creationDrafts.get(activeThreads[kind])?.fields?.[select.id];
     const preferred = select.value || draftModel || current?.providerId || $('modelSelect').value;
     select.replaceChildren(...rows.map(row => new Option(`${row.name} · ${row.model}`, row.id)));
-    if (!rows.length) select.append(new Option('还没有模型配置', ''));
-    if (rows.some(row => row.id === preferred)) select.value = preferred;
+    if (isLocalVoice(kind,localVoiceId)) select.append(new Option('Mac 系统语音 · 本机',localVoiceId));
+    if (!select.options.length) select.append(new Option('还没有模型配置', ''));
+    if ([...select.options].some(option => option.value === preferred)) select.value = preferred;
   }
 }
 
@@ -343,6 +358,13 @@ function renderGenerationResult() {
       preview.textContent = item.status || (item.state === 'running' ? '正在生成…' : '等待生成…');
     }
     if (!['queued', 'running'].includes(item.state)) {
+      if (item.receipt === 'accepted') {
+        const resume = document.createElement('button');
+        resume.type = 'button';
+        resume.textContent = '继续查询原视频';
+        resume.onclick = () => resumeVideo(item);
+        buttons.append(resume);
+      }
       buttons.append(messageButton('refresh', '重新生成这一轮', () => repeatCreation(item)),
         messageButton('edit', '编辑这轮提示词', () => editCreation(item)));
     }
@@ -466,7 +488,15 @@ $('creationGallery').addEventListener('close', () => {
 function updateGenerationComposer() {
   const prompt = generationPromptElement();
   const hasModel = Boolean(generationModelId());
+  const local = isLocalVoice(generationKind,generationModelId());
+  if (generationKind === 'audio') {
+    $('localVoiceLabel').hidden = $('localVoiceFormat').hidden = !local;
+    for (const id of ['generationAudioVoice','generationAudioFormat','generationAudioEndpoint','generationAudioOptions']) {
+      $(id).closest('label, details').hidden = local;
+    }
+  }
   $('runGeneration').disabled = !historyLoaded || !hasModel || !prompt.value.trim();
+  if (local && prompt.value.length > 3000) $('runGeneration').disabled = true;
   $('runGeneration').lastChild.textContent = generationRequestId ? ' 加入队列' : ' 开始生成';
   $('cancelGeneration').hidden = !runningCreation || creationThread(runningCreation.item) !== activeThread();
   const editing = creationDrafts.get(activeThread())?.editing;
@@ -476,7 +506,7 @@ function updateGenerationComposer() {
   prompt.placeholder = follow ? '继续描述要调整的地方…' : generationPlaceholders[generationKind];
   $('generationPromptLabel').textContent = editing ? '编辑这轮提示词' : follow ? '继续创作 · 沿用本会话的文字描述' : generationPromptLabels[generationKind];
   $('runGeneration').title = hasModel ? '开始生成 · ⌘ / Ctrl + Enter' : '请先在设置中添加模型配置';
-  if (prompt) $('generationPromptCount').textContent = `${prompt.value.length} / 8,000`;
+  if (prompt) $('generationPromptCount').textContent = `${prompt.value.length} / ${local ? '3,000' : '8,000'}`;
 }
 
 async function refreshGenerationModels() {
@@ -516,6 +546,9 @@ function generationInput(kind, fields, prompt) {
     input.options = parseGenerationOptions(value('Options'));
   }
   if (kind === 'audio') {
+    if (isLocalVoice(kind,input.providerId)) {
+      return {kind,providerId:input.providerId,prompt,voice:value('LocalVoice') || 'default',speed:Number(value('Speed')) || 1};
+    }
     input.voice = value('Voice');
     input.format = value('Format');
     input.speed = Number(value('Speed')) || 1;
@@ -583,7 +616,7 @@ function renderCreationQueue() {
     const row = document.createElement('div');
     row.className = 'generation-queued';
     const title = document.createElement('span');
-    title.textContent = (job === runningCreation ? '生成中' : '等待中') + ' · ' + job.input.prompt;
+    title.textContent = (job === runningCreation ? '生成中' : '等待中') + ' · ' + (job.input.prompt || job.item.prompt);
     title.title = title.textContent;
     const cancel = document.createElement('button');
     cancel.type = 'button';
@@ -651,6 +684,7 @@ $('clearGenerationHistory').onclick = async () => {
   if (!window.confirm('清空本机的创作记录、草稿和预览文件？')) return;
   try {
     await archiveOperation('readwrite', (records, media) => { records.clear(); media.clear(); });
+    await api.generation.forget(generationHistory.filter(item => item.kind === 'video').map(item => item.id));
     generationHistory = [];
     for (const id of creationDrafts.keys()) localStorage.removeItem(draftPrefix + id);
     creationDrafts.clear();
@@ -709,18 +743,19 @@ function enqueueCreation(prompt, fields, parentId) {
   try { input = generationInput(generationKind, fields, prompt.trim()); }
   catch (error) { $('generationStatus').textContent = errorMessage(error); return false; }
   if (!historyLoaded) return false;
-  if (!input.providerId || !providers.some(provider => provider.id === input.providerId)) {
+  if (!isLocalVoice(input.kind,input.providerId) && !providers.some(provider => provider.id === input.providerId)) {
     $('generationStatus').textContent = '请选择可用的生成模型。';
     return false;
   }
   if (!input.prompt) return false;
   const item = { id: crypto.randomUUID(), threadId: activeThread(), parentId, kind: input.kind,
-    prompt: input.prompt, fields, state: 'queued', createdAt: Math.max(Date.now(), (generationHistory[0]?.createdAt || 0) + 1) };
+    prompt: input.prompt, fields, ...(input.kind === 'video' && { tracksSubmission: true }), state: 'queued',
+    createdAt: Math.max(Date.now(), (generationHistory[0]?.createdAt || 0) + 1) };
   generationHistory.unshift(item);
-  generationQueue.push({ input, item });
-  void archiveOperation('readwrite', records => records.put({ ...item, state: 'queued' })).catch(error => {
-    if (activeThread() === item.threadId) $('generationStatus').textContent = errorMessage(error);
-  });
+  const recorded = archiveOperation('readwrite', records => records.put({ ...item, state: 'queued' }))
+    .then(() => null, error => error);
+  generationQueue.push({ input, item, recorded });
+
   renderGenerationHistory();
   renderGenerationResult();
   $('generationOutput').scrollTop = $('generationOutput').scrollHeight;
@@ -729,7 +764,19 @@ function enqueueCreation(prompt, fields, parentId) {
   return true;
 }
 
+function videoRecoveryText(item) {
+  return item.receipt === 'accepted' ? '已保留远程任务号，可继续查询原视频。' : '提交结果未知，服务可能已计费，请先核对服务商记录。';
+}
+function resumeVideo(item) {
+  if (item.receipt !== 'accepted' || runningCreation || generationQueue.length) {
+    $('generationStatus').textContent = '请在当前队列结束后查询原任务。';
+    return;
+  }
+  generationQueue.push({ input: { kind: 'video', providerId: item.fields.generationVideoModel, resume: true }, item });
+  void processCreationQueue();
+}
 function repeatCreation(item) {
+  if (item.receipt && !window.confirm('重新生成将提交一个新视频任务，服务商可能再次收费。继续吗？')) return;
   enqueueCreation(item.prompt, item.fields || captureFields(), item.parentId || null);
 }
 
@@ -796,11 +843,22 @@ async function processCreationQueue() {
   if (activeThread() === item.threadId) renderGenerationResult();
   renderCreationQueue();
   try {
+    const recordingError = await job.recorded;
+    if (recordingError) throw recordingError;
+    await archiveOperation('readwrite', records => records.put(item));
+    if (job.cancelled) throw Error('已停止本机等待');
     const result = await api.generation.run({ ...input, prompt: contextualPrompt(item), requestId: item.id });
-    if (job.cancelled) await finishCreation(item, 'stopped', '已停止生成。');
-    else await finishCreation(item, 'done', '生成完成，可以播放或保存文件。', result);
+    if (job.cancelled) throw Error('已停止本机等待');
+    delete item.receipt;
+    await finishCreation(item, 'done', '生成完成，可以播放或保存文件。', result);
+    if (item.kind === 'video' && !unsavedAssets.has(item.id)) await api.generation.forget([item.id]).catch(() => {});
   } catch (error) {
-    await finishCreation(item, job.cancelled ? 'stopped' : 'failed', job.cancelled ? '已停止生成。' : errorMessage(error));
+    let note = job.cancelled ? '已停止本机等待。' : errorMessage(error);
+    if (item.kind === 'video') {
+      const receipt = (await api.generation.receipts().catch(() => ({})))[item.id];
+      if (receipt) { item.receipt = receipt; note += ' ' + videoRecoveryText(item); }
+    }
+    await finishCreation(item, job.cancelled ? 'stopped' : 'failed', note);
   } finally {
     runningCreation = null;
     generationRequestId = '';

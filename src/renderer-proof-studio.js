@@ -3,13 +3,13 @@
 (() => {
   const el = id => document.getElementById(id);
   const dialog = el('proofStudio');
-  const briefs = {
-    launch: { edition: '新品发布', original: '让灵感成形。', casual: '有个想法？一起试试。', short: '让想法成形。', art: 'silk-knot.png', alt: '层叠的彩色丝结' },
-    invite: { edition: '体验邀请', original: '开启你的创作之旅。', casual: '来做点自己的东西吧。', short: '一起开工。', art: 'proof-workspace.png', alt: 'Xiaoxiao 桌面工作区示例截图' }
-  };
-  const sessions = new Map();
-  const names = { title: '海报标题', voice: '旁白稿' };
-  const nodes = { title: el('proofTitleObject'), voice: el('proofVoiceObject') };
+  const api = window.nova.proof;
+  let scope = {};
+  let generation = 0;
+  let saving = false;
+  let previewTurn;
+  const names = { title: '海报标题', voice: '旁白稿', body: '海报正文' };
+  const nodes = { title: el('proofTitleObject'), voice: el('proofVoiceObject'), body: el('proofBodyObject') };
   let opener;
   let session;
   let draft;
@@ -21,32 +21,42 @@
   function focusAction(id) { el(id).focus({ preventScroll: true }); }
   function show() {
     const { title, voice } = session.current;
+    el('proofVersion').textContent = (scope.conversationId ? '当前会话' : scope.projectId ? '当前项目' : '本机作品') + ' · ' + (session.number ? '已保存 v' + session.number : '初稿');
+
     for (const [key, node] of Object.entries(nodes)) {
       node.textContent = session.current[key];
       node.setAttribute('aria-pressed', String(key === target));
       node.setAttribute('aria-label', names[key] + '，' + session.current[key]);
     }
     el('proofTarget').textContent = target ? '修改' + names[target] : '想改哪里？';
-    el('proofHelp').textContent = target ? '只修改选中的对象，可先比较再采纳。' : '点选海报标题或旁白稿，再写下修改要求。';
+    el('proofHelp').textContent = target ? '只修改选中的对象，可先比较再采纳。' : '点选标题、正文或旁白，再写下修改要求。';
     el('proofCompare').hidden = !draft;
     el('proofForm').hidden = Boolean(draft);
+    el('proofAudio').hidden = Boolean(draft) || target !== 'voice';
     el('proofSync').hidden = Boolean(draft) || target !== 'title' || title === voice;
-    el('proofUndo').hidden = Boolean(draft) || !session.history.length;
+    el('proofUndo').hidden = Boolean(draft) || !session.undoTo;
     if (draft) {
       el('proofBefore').textContent = session.current[draft.target];
       el('proofAfter').textContent = draft.text;
       el('proofTarget').textContent = '比较' + names[draft.target];
-      el('proofHelp').textContent = '采纳后写入这份演示作品。';
+      el('proofHelp').textContent = '采纳后保存为新版本。';
     }
   }
 
-  function chooseBrief() {
+  async function chooseBrief() {
+    const token = ++generation;
     const id = el('proofBrief').value;
-    const brief = briefs[id];
-    if (!sessions.has(id)) {
-      sessions.set(id, { brief, current: { title: brief.original, voice: brief.original }, history: [] });
-    }
-    session = sessions.get(id);
+    cancelModelPreview();
+    session = null;
+    el('proofVersion').textContent = '读取作品中…';
+    dialog.querySelector('.proof-layout').inert = true;
+    try {
+      const loaded = await api.read({ ...scope, brief: id });
+      if (token !== generation) return;
+      session = loaded;
+    } catch (error) { if (token === generation) el('proofVersion').textContent = errorMessage(error); return; }
+    dialog.querySelector('.proof-layout').inert = false;
+    const brief = session.brief;
     ++dictationTurn;
     draft = null;
     target = null;
@@ -59,10 +69,12 @@
     el('proofPrompt').value = '';
     status();
     show();
+    nodes.title.focus();
   }
 
-  function preview() {
+  async function preview() {
     const input = el('proofPrompt').value.trim();
+    if (!session || saving) return;
     if (!input) {
       status('写下“口语一点”“短一点”，或用“改成：”输入自己的文案。');
       focusAction('proofPrompt');
@@ -70,17 +82,27 @@
     }
     if (!target) {
       awaitingTarget = true;
-      status('“这里”是指海报标题还是旁白稿？请点选。');
+      status('请点选海报标题、正文或旁白稿。');
       nodes.title.focus();
       return;
     }
     const literal = input.match(/^改成\s*[:：]\s*([\s\S]+)$/);
     let text;
-    if (literal) text = literal[1].trim();
-    else if (/口语|自然|随意/.test(input)) text = session.brief.casual;
-    else if (/短|简洁|精简/.test(input)) text = session.brief.short;
+    if (el('proofModel').value) {
+      const turn = ++generation;
+      previewTurn = turn;
+      status('正在为选中文案生成提案…');
+      try {
+        text = await api.preview({ ...scope, brief: el('proofBrief').value, base: session.id, target,
+          instruction: input, providerId: el('proofModel').value });
+        if (turn !== generation) return;
+      } catch (error) { if (turn === generation) status(errorMessage(error)); return; }
+      finally { if (previewTurn === turn) previewTurn = undefined; }
+    } else if (literal) text = literal[1].trim();
+    else if (target !== 'body' && /口语|自然|随意/.test(input)) text = session.brief.casual;
+    else if (target !== 'body' && /短|简洁|精简/.test(input)) text = session.brief.short;
     if (!text) {
-      status('演示支持“口语一点”“短一点”，也可以用“改成：”指定新文案。');
+      status('本地改稿可用“改成：”指定文案。标题和旁白也支持“口语一点”和“短一点”。');
       focusAction('proofPrompt');
       return;
     }
@@ -89,22 +111,58 @@
       focusAction('proofPrompt');
       return;
     }
-    draft = { target, text };
+    draft = { target, text, base: session.id, operation: 'edit' };
     status('');
     show();
     focusAction('proofAccept');
   }
 
-  function undo() {
-    if (draft || !session.history.length) return;
-    session.current = session.history.pop();
-    status('已撤销上一步。');
-    show();
-    nodes[target || 'title'].focus();
+  async function commit(input, message, focus) {
+    if (saving || !session) return;
+    saving = true;
+    el('proofBrief').disabled = el('proofClose').disabled = true;
+    dialog.querySelector('.proof-layout').inert = true;
+    status('正在保存…');
+    try {
+      session = await api.change({ ...scope, brief: el('proofBrief').value, ...input });
+      draft = null;
+      el('proofPrompt').value = '';
+      status(message);
+      show();
+    } catch (error) {
+      const note = errorMessage(error);
+      if (note.includes('作品版本已更新')) await chooseBrief();
+      status(note);
+    } finally {
+      saving = false;
+      el('proofBrief').disabled = el('proofClose').disabled = false;
+      dialog.querySelector('.proof-layout').inert = !session;
+      nodes[focus].focus();
+    }
   }
+  function undo() {
+    if (draft || !session?.undoTo || saving) return;
+    ++generation;
+    cancelModelPreview();
+    void commit({ operation: 'undo', base: session.id }, '已撤销上一步。', target || 'title');
+  }
+  function cancelModelPreview() {
+    if (previewTurn === undefined) return;
+    previewTurn = undefined;
+    void api.cancel().catch(() => {});
+  }
+  function invalidatePreview() {
+    if (!session || saving) return;
+    ++generation;
+    cancelModelPreview();
+    status();
+  }
+  el('proofPrompt').oninput = invalidatePreview;
+  el('proofModel').onchange = invalidatePreview;
 
   for (const [key, node] of Object.entries(nodes)) {
     node.onclick = () => {
+      invalidatePreview();
       const pending = awaitingTarget;
       awaitingTarget = false;
       ++dictationTurn;
@@ -119,13 +177,15 @@
   for (const id of ['openProofFromKnot', 'openProofFromRail']) {
     el(id).onclick = () => {
       opener = el(id);
-      chooseBrief();
+      scope = current ? { conversationId: current.id } : { projectId: selectedProjectId };
+      el('proofModel').replaceChildren(new Option('本地改稿', ''), ...providers.map(p => new Option('用 ' + p.name + ' / ' + p.model + ' 改写选区', p.id)));
       dialog.showModal();
-      nodes.title.focus();
+      void chooseBrief();
     };
   }
   el('proofClose').onclick = () => dialog.close();
-  dialog.addEventListener('close', () => { ++dictationTurn; opener?.focus(); });
+  dialog.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
+  dialog.addEventListener('close', () => { ++generation; ++dictationTurn; cancelModelPreview(); opener?.focus(); });
   el('proofBrief').onchange = chooseBrief;
   el('proofForm').onsubmit = event => { event.preventDefault(); preview(); };
   el('proofPrompt').onkeydown = event => {
@@ -145,14 +205,7 @@
   };
   el('proofAccept').onclick = () => {
     if (!draft) return;
-    session.history.push(session.current);
-    session.current = { ...session.current, [draft.target]: draft.text };
-    const changed = draft.target;
-    draft = null;
-    el('proofPrompt').value = '';
-    status('已采纳' + names[changed] + '。');
-    show();
-    nodes[changed].focus();
+    void commit(draft, '已采纳' + names[draft.target] + '。', draft.target);
   };
   el('proofDiscard').onclick = () => {
     draft = null;
@@ -161,9 +214,22 @@
     focusAction('proofPrompt');
   };
   el('proofSync').onclick = () => {
-    draft = { target: 'voice', text: session.current.title };
+    invalidatePreview();
+    draft = { target: 'voice', text: session.current.title, base: session.id, operation: 'sync' };
     show();
     focusAction('proofAccept');
+  };
+  el('proofAudio').onclick = () => {
+    if (!session || saving) return;
+    const text = session.current.voice;
+    opener = null;
+    dialog.close();
+    if (presence.isHome()) presence.showWorkspace();
+    el('openGenerationStudio').click();
+    setGenerationTab('audio', crypto.randomUUID());
+    generationPromptElement().value = text;
+    generationPromptElement().dispatchEvent(new Event('input', { bubbles: true }));
+    generationPromptElement().focus();
   };
   el('proofUndo').onclick = undo;
   dialog.addEventListener('keydown', event => {

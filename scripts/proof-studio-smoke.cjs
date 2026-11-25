@@ -2,17 +2,43 @@ const assert = require('node:assert/strict');
 const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const http = require('node:http');
+const { once } = require('node:events');
+const { setTimeout: delay } = require('node:timers/promises');
+const { Store } = require('../src/store');
 const { _electron: electron } = require('playwright');
 
 (async () => {
   const root = path.resolve(__dirname, '..');
   const data = await fs.mkdtemp(path.join(os.tmpdir(), 'xiaoxiao-proof-'));
   const executablePath = process.env.XIAOXIAO_SMOKE_EXECUTABLE;
+  const calls = [];
+  const slowRequest = Promise.withResolvers();
+  const slowAborted = Promise.withResolvers();
+  const server = http.createServer(async (req, res) => {
+    let raw = '';
+    for await (const chunk of req) raw += chunk;
+    const body = JSON.parse(raw);
+    calls.push({url:req.url,body});
+    if (calls.length === 2) {
+      slowRequest.resolve();
+      res.once('close',() => slowAborted.resolve());
+      return;
+    }
+    res.writeHead(200,{'content-type':'application/json'}).end(JSON.stringify({
+      choices:[{message:{role:'assistant',content:'周末来工作室见。'},finish_reason:'stop'}]
+    }));
+  });
   let app;
   try {
-    app = await electron.launch({ executablePath, args: executablePath ? [] : ['.'], cwd: root,
+    server.listen(0,'127.0.0.1');
+    await once(server,'listening');
+    new Store(data).write('providers',[{id:'fixture',kind:'openai-compatible',name:'隔离服务',model:'rewrite',
+      baseUrl:'http://127.0.0.1:'+server.address().port+'/v1',stream:false}]);
+    const launch = () => electron.launch({ executablePath, args: executablePath ? [] : ['.'], cwd: root,
       env: { ...process.env, XIAOXIAO_SMOKE_DIR: data, XIAOXIAO_SMOKE_SHOW: '1' } });
-    const page = await app.firstWindow();
+    app = await launch();
+    let page = await app.firstWindow();
     page.setDefaultTimeout(9000);
     const errors = [], network = [];
     page.on('pageerror', e => errors.push(e.message));
@@ -31,7 +57,7 @@ const { _electron: electron } = require('playwright');
     await node('proofPrompt').fill('口语一点，底图留着');
     await node('proofPreview').click();
     await focus('proofTitleObject');
-    assert.match(await text('proofStatus'), /标题还是旁白/);
+    assert.match(await text('proofStatus'), /标题、正文或旁白/);
     await page.keyboard.press('Enter');
     await focus('proofAccept');
     assert.equal(await text('proofBefore'), original);
@@ -65,7 +91,7 @@ const { _electron: electron } = require('playwright');
     await node('proofPrompt').fill('自定义指令');
     await node('proofPreview').click();
     assert(await node('proofCompare').isHidden());
-    assert.match(await text('proofStatus'), /演示支持/);
+    assert.match(await text('proofStatus'), /本地改稿/);
     await node('proofPrompt').fill('改成：周五来工作室看看。');
     await node('proofPreview').click();
     await node('proofAccept').click();
@@ -84,10 +110,68 @@ const { _electron: electron } = require('playwright');
     await node('proofClose').click();
     await focus('openProofFromRail');
     assert(await node('presence').isVisible());
+    await app.close();
+    app = await launch();
+    page = await app.firstWindow();
+    page.on('pageerror', e => errors.push(e.message));
+    await node('presenceKnot').click();
+    await node('openProofFromKnot').click();
+    await node('proofBrief').selectOption('invite');
+    await page.waitForFunction(() => document.querySelector('#proofVersion').textContent.endsWith('v1'));
+    assert.equal(await text('proofVoiceObject'), '周五来工作室看看。');
+    await node('proofVoiceObject').click();
+    assert.equal(calls.length,0,'local proof operations must never send model requests');
+    await node('proofModel').selectOption('fixture');
+    await node('proofPrompt').fill('改得更亲切');
+    await node('proofPreview').click();
+    await focus('proofAccept');
+    assert.equal(await text('proofAfter'),'周末来工作室见。');
+    assert.equal(calls[0].url,'/v1/chat/completions');
+    assert.deepEqual(calls[0].body.messages.map(m=>m.role),['system','user']);
+    assert.deepEqual(JSON.parse(calls[0].body.messages[1].content),{target:'voice',selected:'周五来工作室看看。',instruction:'改得更亲切'});
+    assert.equal(calls[0].body.tools,undefined);
+    await node('proofDiscard').click();
+    await node('proofPreview').click();
+    const deadline = promise => Promise.race([promise,delay(9000,null,{ref:false}).then(()=>{throw Error('选区请求超时');})]);
+    await deadline(slowRequest.promise);
+    await node('proofBodyObject').click();
+    await deadline(slowAborted.promise);
+    assert(await node('proofCompare').isHidden());
+    assert.equal(await text('proofTarget'),'修改海报正文');
+    await node('proofVoiceObject').click();
+    await node('proofAudio').click();
+    await focus('generationAudioPrompt');
+    assert.equal(await node('generationAudioPrompt').inputValue(), '周五来工作室看看。');
+    if (process.platform === 'darwin') {
+      await node('generationAudioModel').selectOption('macos-system-speech');
+      await node('generationAudioLocalVoice').selectOption('Tingting');
+      assert(await node('generationAudioEndpoint').isHidden());
+      await node('runGeneration').click();
+      await page.waitForFunction(() => document.querySelector('.creation-turn audio')?.duration > 0);
+      const audio = path.join(output || data,'proof-voice.wav');
+      await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},audio);
+      await node('saveGeneration').click();
+      await page.getByText('作品已导出。',{exact:true}).waitFor();
+      const bytes = await fs.readFile(audio);
+      assert.equal(bytes.toString('ascii',8,12),'WAVE');
+      assert(bytes.length > 4096);
+    }
+    const check = await page.evaluate(async () => {
+      const c = await nova.conversations.create({title:'测试分支'});
+      const base = {brief:'invite',conversationId:c.id};
+      const old = await nova.proof.read(base);
+      const branch = await nova.conversations.branch({id:c.id});
+      const fork = {...base,conversationId:branch.id};
+      await nova.proof.change({...fork,base:old.id,operation:'edit',target:'body',text:'只在分支更新'});
+      return [(await nova.proof.read(base)).current.body,(await nova.proof.read(fork)).current.body];
+    });
+    assert.notEqual(check[0],check[1]);
+    assert.equal(check[1],'只在分支更新');
     assert.deepEqual(errors, []);
     assert.deepEqual(network, []);
-    console.log('PASS: two briefs, target clarification, keyboard preview, apply/discard, explicit voice sync, undo, focus restoration, chat draft and offline operation.');
+    assert.equal(calls.length,2);
+    console.log('PASS: offline edits, explicit voice sync, undo, restart, independent branch, selected-only model context, stale request cancellation, audio draft and keyboard focus.');
   } finally {
-    try { await app?.close(); } finally { await fs.rm(data, { recursive: true, force: true }); }
+    try { await app?.close(); } finally { server.closeAllConnections(); server.close(); await fs.rm(data, { recursive: true, force: true }); }
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

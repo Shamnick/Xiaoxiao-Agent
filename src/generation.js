@@ -122,7 +122,7 @@ function wait(ms, signal) {
   });
 }
 
-async function generateAsset(provider, input, { signal, request = fetch, pollDelayMs = 2000, onStatus = () => {} } = {}) {
+async function generateAsset(provider, input, { signal, request = fetch, pollDelayMs = 2000, onStatus = () => {}, onSubmit = () => {}, onVideoId = () => {} } = {}) {
   if (!input || !['image', 'video', 'audio'].includes(input.kind)) throw Error('不支持的生成类型');
   const kind = input.kind;
   const prompt = String(input.prompt || '').trim();
@@ -156,7 +156,10 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
     Object.assign(body, input.options);
   }
   onStatus({ phase: 'submit', text: kind === 'video' ? '正在提交视频生成任务…' : '正在提交生成任务…' });
-  const response = await request(url, { method: 'POST', headers: headers(provider), body: JSON.stringify(body), signal, redirect: 'error' });
+  const init = { method: 'POST', headers: headers(provider), body: JSON.stringify(body), signal, redirect: 'error' };
+  signal?.throwIfAborted();
+  onSubmit();
+  const response = await request(url, init);
   if (!response.ok) throw Error(`生成服务返回 HTTP ${response.status}`);
   if (kind !== 'audio' && !(response.headers.get('content-type') || '').includes('json')) {
     const data = await readLimited(response, MAX_OUTPUT, '生成结果');
@@ -173,6 +176,14 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   if (assets.length) return { ...assets[0], assets };
   const videoId = payload?.id || payload?.task_id || payload?.data?.id;
   if (kind !== 'video' || !videoId) throw Error('生成服务没有返回可播放的结果');
+  if (!/^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,255}$/.test(String(videoId))) throw Error('远程视频任务号无效');
+  await onVideoId(String(videoId));
+  return pollVideo(provider, input, String(videoId), { signal, request, pollDelayMs, onStatus });
+}
+
+async function pollVideo(provider, input, videoId, { signal, request = fetch, pollDelayMs = 2000, onStatus = () => {} } = {}) {
+  const url = endpoint(provider.baseUrl, input.endpoint, defaults.video);
+  const kind = 'video';
   const pollPath = input.pollEndpoint ? String(input.pollEndpoint).replace('{id}', encodeURIComponent(String(videoId))) : '';
   const pollUrl = pollPath ? endpoint(provider.baseUrl, pollPath, '') : `${url.replace(/\/$/, '')}/${encodeURIComponent(String(videoId))}`;
   for (let attempt = 0; attempt < 90; attempt++) {
@@ -180,10 +191,10 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
     onStatus({ phase: 'poll', attempt: attempt + 1, text: `视频生成中 · 已检查 ${attempt + 1} 次` });
     const poll = await request(pollUrl, { headers: headers(provider), signal, redirect: 'error' });
     if (!poll.ok) throw Error(`视频任务查询失败 HTTP ${poll.status}`);
-    payload = await jsonResponse(poll);
+    const payload = await jsonResponse(poll);
     const status = String(payload.status || '').toLowerCase();
     if (['failed', 'cancelled', 'canceled', 'error'].includes(status)) throw Error(payload.error?.message || '视频生成失败');
-    assets = await materializeAssets(responseAssets(payload, kind), signal, request);
+    const assets = await materializeAssets(responseAssets(payload, kind), signal, request);
     if (assets.length) return { ...assets[0], assets };
     if (['completed', 'complete', 'succeeded', 'success', 'done'].includes(status)) {
       const contentPath = input.contentEndpoint
@@ -209,4 +220,4 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   throw Error('视频生成超过 3 分钟仍未完成');
 }
 
-module.exports = { defaults, generateAsset };
+module.exports = { defaults, generateAsset, pollVideo };

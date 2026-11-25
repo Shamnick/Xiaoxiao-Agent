@@ -55,3 +55,7 @@
 @media (prefers-reduced-motion: reduce) {
   #proofStudio *, #openProofFromKnot { transition: none !important; }
 }
+
+#proofBodyObject { color: #332b38; font-size: 14px; margin-left: -6px; padding: 4px 6px; max-width: 68%; }
+#proofBodyObject:is(:hover,:focus-visible,[aria-pressed="true"]) { background: #f3edf6cf; }
+#proofModel { display: block; width: 100%; margin: 6px 0 12px; }

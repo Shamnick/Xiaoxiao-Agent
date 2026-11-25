@@ -746,6 +746,8 @@
             <section id="generationPanelAudio" class="generation-panel" role="tabpanel" aria-labelledby="generationTabAudio" hidden>
               <div class="generation-fields">
                 <label class="generation-span">模型<select id="generationAudioModel"></select></label>
+                <label id="localVoiceLabel" hidden>本机音色<select id="generationAudioLocalVoice"><option value="default">系统默认</option><option value="Tingting">婷婷 · 普通话</option><option value="Samantha">Samantha · 英语</option></select></label>
+                <span id="localVoiceFormat" hidden>WAV · 本机合成</span>
                 <label>音色<select id="generationAudioVoice"><option>alloy</option><option>ash</option><option>coral</option><option>echo</option><option>fable</option><option>onyx</option><option>nova</option><option>sage</option><option>shimmer</option></select></label>
                 <label>格式<select id="generationAudioFormat"><option>mp3</option><option>wav</option><option>opus</option></select></label>
                 <label>语速<select id="generationAudioSpeed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select></label>
@@ -761,7 +763,7 @@
   </main>
   <dialog id="proofStudio" aria-labelledby="proofHeading">
     <header class="proof-bar">
-      <div><h2 id="proofHeading">局部改稿</h2><p>本地演示 · 使用示例文案</p></div>
+      <div><h2 id="proofHeading">局部改稿</h2><p id="proofVersion">读取作品中…</p></div>
       <label>简报 <select id="proofBrief"><option value="launch">新品发布</option><option value="invite">体验邀请</option></select></label>
       <button type="button" id="proofClose" class="icon-button" aria-label="关闭局部改稿"><span class="ui-icon i-close" aria-hidden="true"></span></button>
     </header>
@@ -771,14 +773,16 @@
           <div class="proof-folio"><span>Xiaoxiao Agent</span><span id="proofEdition"></span></div>
           <img src="silk-knot.png" alt="作品底图中的彩色丝结" class="proof-art" draggable="false">
           <button type="button" class="proof-object" id="proofTitleObject" aria-pressed="false" title="选择海报标题"></button>
+          <button type="button" id="proofBodyObject" class="proof-object" aria-pressed="false"></button>
           <p class="proof-caption">底图已锁定</p>
         </article>
         <div class="proof-track"><label id="proofVoiceLabel">旁白稿</label><button type="button" id="proofVoiceObject" class="proof-object" aria-describedby="proofVoiceLabel" aria-pressed="false"></button></div>
       </section>
       <section class="proof-inspector" aria-label="局部修改">
         <h3 id="proofTarget">想改哪里？</h3>
-        <p id="proofHelp">点选海报标题或旁白稿，再写下修改要求。</p>
+        <p id="proofHelp">点选标题、正文或旁白，再写下修改要求。</p>
         <form id="proofForm">
+          <label for="proofModel">改稿方式</label><select id="proofModel"><option value="">本地改稿</option></select>
           <label for="proofPrompt">修改要求</label>
           <textarea id="proofPrompt" rows="3" maxlength="240" placeholder="口语一点，或输入「改成：新文案」"></textarea>
           <div class="proof-actions"><button type="button" id="proofDictate" aria-label="听写修改要求" title="听写修改要求"><span class="ui-icon i-mic" aria-hidden="true"></span></button><button type="submit" class="primary" id="proofPreview">预览修改</button></div>
@@ -788,7 +792,7 @@
           <div class="proof-actions"><button type="button" id="proofDiscard">放弃提案</button><button type="button" class="primary" id="proofAccept">采纳修改</button></div>
         </div>
         <p id="proofStatus" role="status" aria-live="polite"></p>
-        <div class="proof-actions"><button type="button" id="proofSync" hidden>同步这句到旁白</button><button type="button" id="proofUndo" hidden>撤销上一步</button></div>
+        <div class="proof-actions"><button type="button" id="proofSync" hidden>同步这句到旁白</button><button type="button" id="proofAudio" hidden>用这句制作语音</button><button type="button" id="proofUndo" hidden>撤销上一步</button></div>
       </section>
     </div>
   </dialog>

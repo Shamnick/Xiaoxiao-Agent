@@ -1,6 +1,6 @@
 {
   "name": "xiaoxiao-agent",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "description": "Xiaoxiao Agent — multi-model desktop workspace with generation, visual testing, and Agent workflows",
   "main": "src/main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "pack": "electron-builder --dir",
     "dist:mac": "electron-builder --mac dmg",
     "check": "node scripts/check.cjs",
-    "test:desktop": "node scripts/connection-smoke.cjs && node scripts/metrics-smoke.cjs && node scripts/navigator-smoke.cjs && node scripts/chat-delivery-smoke.cjs && node scripts/presence-smoke.cjs && node scripts/smoke.cjs && node scripts/workflow-smoke.cjs && node scripts/workbench-smoke.cjs && node scripts/generation-smoke.cjs && node scripts/proof-studio-smoke.cjs",
+    "test:desktop": "node scripts/connection-smoke.cjs && node scripts/metrics-smoke.cjs && node scripts/navigator-smoke.cjs && node scripts/chat-delivery-smoke.cjs && node scripts/presence-smoke.cjs && node scripts/smoke.cjs && node scripts/workflow-smoke.cjs && node scripts/workbench-smoke.cjs && node scripts/generation-smoke.cjs && node scripts/proof-studio-smoke.cjs && node scripts/video-recovery-smoke.cjs",
     "screenshots": "node scripts/screenshots.cjs",
     "prestart": "npm run build:renderer",
     "prepack": "npm run build:renderer",

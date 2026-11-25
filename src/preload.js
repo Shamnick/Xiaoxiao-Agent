@@ -9,13 +9,14 @@ const subscribe = channel => callback => {
 contextBridge.exposeInMainWorld('nova', {
   platform: process.platform,
   brand: call('brand:get'),
+  proof: { read: call('proof:read'), change: call('proof:change'), preview: call('proof:preview'), cancel: call('proof:cancel') },
   presence: { sample: call('presence:sample'), dictate: call('presence:dictate') },
   providers: {
     list: call('providers:list'), save: call('providers:save'), delete: call('providers:delete'),
     rememberModel: call('providers:rememberModel'), models: call('providers:models'), test: call('providers:test')
   },
   media: { analyze: call('media:analyze'), cancel: call('media:cancel') },
-  generation: { run: call('generation:run'), cancel: call('generation:cancel'), save: call('generation:save'), saveAll: call('generation:saveAll'), onEvent: subscribe('generation:event') },
+  generation: { receipts: call('generation:receipts'), forget: call('generation:forget'), run: call('generation:run'), cancel: call('generation:cancel'), save: call('generation:save'), saveAll: call('generation:saveAll'), onEvent: subscribe('generation:event') },
   messages: { checkConnection: call('messages:checkConnection'), copy: call('messages:copy'), rate: call('messages:rate'), saveFile: call('messages:saveFile'),
     openArtifact: call('messages:openArtifact') },
   conversations: {
