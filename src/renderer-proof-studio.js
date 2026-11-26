@@ -41,7 +41,7 @@
 
     for (const [key, node] of Object.entries(nodes)) {
       node.textContent = session.current[key];
-      node.setAttribute('aria-pressed', String(key === target));
+      node.setAttribute('aria-pressed', String(key === (draft?.target || target)));
       node.setAttribute('aria-label', names[key] + '，' + session.current[key]);
     }
     el('proofTarget').textContent = target ? '修改' + names[target] : '想改哪里？';
@@ -157,7 +157,7 @@
     focusAction('proofAccept');
   }
 
-  async function commit(input, message, focus) {
+  async function commit(input, message) {
     if (saving || !session) return;
     saving = true;
     el('proofExport').disabled = true;
@@ -168,7 +168,12 @@
       session = await api.change({ ...scope, brief: el('proofBrief').value, ...input });
       draft = null;
       status(message);
-      if (input.operation === 'edit') {
+      if (input.operation === 'sync') {
+        // Sync is a voice change. Keep the title's unfinished instruction separate.
+        target = 'voice';
+        el('proofPrompt').value = instructions.fields.voice || '';
+        storeInstructions();
+      } else if (input.operation === 'edit') {
         el('proofPrompt').value = '';
         rememberInput();
       }
@@ -183,14 +188,16 @@
       el('proofExport').disabled = !session || Boolean(draft);
       el('proofBrief').disabled = el('proofClose').disabled = false;
       dialog.querySelector('.proof-layout').inert = !session;
-      nodes[focus].focus();
+      if (draft && session) focusAction('proofAccept');
+      else if (session) (nodes[target] || nodes.title).focus();
+      else focusAction('proofBrief');
     }
   }
   function undo() {
     if (draft || !session?.undoTo || saving) return;
     ++generation;
     cancelModelPreview();
-    void commit({ operation: 'undo', base: session.id }, '已撤销上一步。', target || 'title');
+    void commit({ operation: 'undo', base: session.id }, '已撤销上一步。');
   }
   function setPreviewTurn(turn) {
     previewTurn = turn;
@@ -323,7 +330,7 @@
   };
   el('proofAccept').onclick = () => {
     if (!draft) return;
-    void commit(draft, '已采纳' + names[draft.target] + '。', draft.target);
+    void commit(draft, '已采纳' + names[draft.target] + '。');
   };
   el('proofDiscard').onclick = () => {
     draft = null;

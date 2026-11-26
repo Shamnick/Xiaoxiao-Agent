@@ -40,7 +40,7 @@ const ProofInstructions = (() => {
   }
   function save(storage, scope, brief, record) {
     const id = key(scope, brief);
-    if (!Object.keys(record.fields).length) storage.removeItem(id);
+    if (!targets.includes(record.selected) && !Object.keys(record.fields).length) storage.removeItem(id);
     else storage.setItem(id, JSON.stringify(record));
   }
   function forgetConversation(storage, conversationId) {

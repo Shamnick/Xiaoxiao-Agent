@@ -31,7 +31,10 @@ test('brief and scope delimit unpublished instructions including branches and ch
       assert.deepEqual(read(storage, owner, brief), i === 2 ? empty : { selected:'body', fields:{body:i + brief} });
     }
   }
-  save(storage, owners[0], 'invite', {selected:'body', fields:{}});
+  const selectedOnly = {selected:'voice', fields:{}};
+  save(storage, owners[0], 'invite', selectedOnly);
+  assert.deepEqual(read(storage, owners[0], 'invite'), selectedOnly);
+  save(storage, owners[0], 'invite', empty);
   assert.deepEqual(read(storage, owners[0], 'invite'), empty);
 });
 
