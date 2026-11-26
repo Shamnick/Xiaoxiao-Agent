@@ -5,10 +5,26 @@
 const ProofInstructions = (() => {
   const targets = ['title', 'body', 'voice'];
   const briefs = ['launch', 'invite'];
-  function key(scope, brief) {
-    const owner = scope.conversationId ? ['chat', scope.conversationId] :
+  function owner(scope) {
+    return scope.conversationId ? ['chat', scope.conversationId] :
       scope.projectId ? ['project', scope.projectId] : ['home'];
-    return 'xiaoxiao-proof-instructions:' + JSON.stringify([...owner, brief]);
+  }
+  function key(scope, brief) {
+    return 'xiaoxiao-proof-instructions:' + JSON.stringify([...owner(scope), brief]);
+  }
+  function locationKey(scope) {
+    return 'xiaoxiao-proof-brief:' + JSON.stringify(owner(scope));
+  }
+  function lastBrief(storage, scope) {
+    try {
+      const id = storage.getItem(locationKey(scope));
+      return briefs.includes(id) ? id : 'launch';
+    } catch { return 'launch'; }
+  }
+  function rememberBrief(storage, scope, id) {
+    if (!briefs.includes(id)) return;
+    if (id === 'launch') storage.removeItem(locationKey(scope));
+    else storage.setItem(locationKey(scope), id);
   }
   function read(storage, scope, brief) {
     const clean = { selected: null, fields: {} };
@@ -28,8 +44,9 @@ const ProofInstructions = (() => {
     else storage.setItem(id, JSON.stringify(record));
   }
   function forgetConversation(storage, conversationId) {
+    storage.removeItem(locationKey({ conversationId }));
     for (const brief of briefs) storage.removeItem(key({ conversationId }, brief));
   }
-  return { read, save, forgetConversation };
+  return { read, save, lastBrief, rememberBrief, forgetConversation };
 })();
 if (typeof module !== 'undefined') module.exports = ProofInstructions;

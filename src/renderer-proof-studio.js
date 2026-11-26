@@ -90,6 +90,8 @@
     art.alt = brief.alt;
     el('proofPrompt').value = instructions.fields[target || 'unassigned'] || '';
     status(el('proofPrompt').value ? '已恢复这份简报的修改要求。' : '');
+    try { ProofInstructions.rememberBrief(localStorage, scope, id); }
+    catch { status('本次简报位置暂时无法保存。'); }
     show();
     (nodes[target] || nodes.title).focus();
     return true;
@@ -247,6 +249,7 @@
       opener = el(id);
       scope = current ? { conversationId: current.id } : { projectId: selectedProjectId };
       el('proofModel').replaceChildren(new Option('本地改稿', ''), ...providers.map(p => new Option('用 ' + p.name + ' / ' + p.model + ' 改写选区', p.id)));
+      el('proofBrief').value = ProofInstructions.lastBrief(localStorage, scope);
       dialog.showModal();
       void chooseBrief();
     };

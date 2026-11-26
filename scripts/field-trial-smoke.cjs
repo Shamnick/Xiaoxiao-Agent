@@ -61,6 +61,9 @@ async function run() {
       conversations: (await nova.conversations.list()).length, providers: (await nova.providers.list()).length,
       marker: localStorage.getItem('field-test-sentinel')
     })), { conversations: 0, providers: 0, marker: null });
+    await b.page.locator('#proofBodyObject').click();
+    const bodyDraft = '改成：只留在第二轮体验邀请的正文。';
+    await b.page.locator('#proofPrompt').fill(bodyDraft);
     await close(b.app);
     await close(a.app);
 
@@ -72,6 +75,13 @@ async function run() {
       providers: (await nova.providers.list()).map(row => row.name), marker: localStorage.getItem('field-test-sentinel')
     })), { titles: ['第一轮记录'], providers: ['试用配置'], marker: 'first' });
     await close(c.app);
+    const otherRound = await prepareTrial(root, ['--resume', path.basename(second.profile)]);
+    const reopened = await openTrial(otherRound);
+    assert.equal(await reopened.page.locator('#proofBrief').inputValue(), 'invite',
+      'Resuming the invitation round should open the same brief');
+    assert.equal(await reopened.page.locator('#proofBodyObject').getAttribute('aria-pressed'), 'true');
+    assert.equal(await reopened.page.locator('#proofPrompt').inputValue(), bodyDraft);
+    await close(reopened.app);
     await assert.rejects(prepareTrial(root, ['--resume', '../profile']), /round-编号/);
     await assert.rejects(prepareTrial(path.join(root, 'missing'), ['--resume', path.basename(first.profile)]), /找不到/);
     console.log('PASS: isolated participants, fresh briefs and empty conversation history, separate browser storage, and explicit round recovery.');

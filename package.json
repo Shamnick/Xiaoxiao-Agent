@@ -1,6 +1,6 @@
 {
   "name": "xiaoxiao-agent",
-  "version": "0.6.14",
+  "version": "0.6.15",
   "description": "Xiaoxiao Agent — multi-model desktop workspace with generation, visual testing, and Agent workflows",
   "main": "src/main.js",
   "scripts": {
