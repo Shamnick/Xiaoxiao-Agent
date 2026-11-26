@@ -4,7 +4,7 @@ Xiaoxiao Agent 是一款独立开发的多模型 AI 桌面工作空间，提供�
 
 ## 直接使用
 
-Apple Silicon Mac 可打开 `dist/mac-arm64/Xiaoxiao Agent.app`，也可将 DMG 中的应用拖到「应用程序」。本次本机试用构建采用 ad hoc 签名。对外分发需要 Developer ID 签名和公证。
+当前 Mac 试用包采用临时签名，可能无法打开窗口。如果「应用程序」里的 Xiaoxiao Agent 打不开，请保留原安装和数据，在已装好开发依赖并运行过 `npm run build:renderer` 的项目目录执行 `/bin/zsh "./打开 Xiaoxiao Agent.command"`。它使用开发运行时打开源码版，沿用 Xiaoxiao 的本机资料。验证时请确认能点开首页输入框；仅看到进程不代表启动成功。正式分发仍需签名和公证。
 
 1. 点击首页中央的丝结展开输入框，再点「连接模型」。点「听写」可使用 macOS 系统听写，确认文字后发送。旁边的扬声器可开启回复朗读。
 2. 填写模型 ID、Base URL 和 API Key，保存后可测试连接、获取模型列表。
