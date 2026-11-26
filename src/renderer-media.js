@@ -223,5 +223,5 @@ $('continueWithMedia').onclick = async () => {
   ].filter(Boolean).join('\n\n');
   const frames = structuredClone(mediaFrames);
   $('mediaLab').close();
-  await sendMessage(handoff, false, frames);
+  await sendMessage(handoff, false, frames, false);
 };

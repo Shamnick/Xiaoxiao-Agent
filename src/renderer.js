@@ -15,6 +15,33 @@ let streamContent = null, composing = false, streamTimer = null;
 let previewScroll = null;
 const runs = new Map();
 const unsent = new Map();
+let missingReferences = [], draftsReady = false;
+function composerDraft() {
+  return { text: $('prompt').value, attachments, missing: missingReferences, skillIds,
+    providerId: $('modelSelect').value, agent: $('agent').checked, planning };
+}
+function persistDraft(key, draft) {
+  if (!draftsReady) return;
+  try {
+    ChatDrafts.write(localStorage, key, draft);
+    $('draftStorageIssue').hidden = true;
+    return true;
+  } catch { $('draftStorageIssue').hidden = false; return false; }
+}
+function renderMissingReferences(disabled) {
+  const missing = missingReferences.length > 0;
+  $('missingReferences').hidden = !missing;
+  const hint = missing ? '需重新添加的引用 · ' + missingReferences.join('、') : '';
+  if ($('draftReferenceHint').textContent !== hint) $('draftReferenceHint').textContent = hint;
+  $('recoverReference').disabled = disabled || referencesFull();
+  $('forgetReferences').disabled = disabled;
+}
+$('recoverReference').onclick = () => $('attach').click();
+$('forgetReferences').onclick = () => {
+  missingReferences = [];
+  update();
+  focusPrompt();
+};
 const systemEdits = new Map();
 const scrollPositions = new Map();
 const openInspectors = new Map();
@@ -97,7 +124,7 @@ function update() {
   $('presenceKnot').disabled = $('enterWorkspace').disabled = $('returnPresence').disabled = locked;
   $('dictate').disabled = locked;
   const canCheck = Boolean(ConnectionIntent.detect($('prompt').value));
-  $('send').disabled = disabled || (!canCheck && !$('modelSelect').value) || !$('prompt').value.trim();
+  $('send').disabled = disabled || missingReferences.length > 0 || (!canCheck && !$('modelSelect').value) || !$('prompt').value.trim();
   $('openConnectionCheck').disabled = disabled;
   $('stop').hidden = !busy;
   $('stop').disabled = !run || run.starting || run.stopping || run.finishing;
@@ -115,7 +142,7 @@ function update() {
   modelPicker.update(disabled);
   for (const id of ['findHistory', 'newProject', 'openFolder', 'heroOpenFolder', 'editProject', 'newChat', 'settings', 'settingsCompact', 'schedulesButton', 'schedulesCompact', 'connectModel']) $(id).disabled = locked;
   $('resumePanel').hidden = busy || !current?.messages?.at(-1)?.recovery;
-  $('resumeTask').disabled = disabled || !$('modelSelect').value || Boolean($('prompt').value.trim());
+  $('resumeTask').disabled = disabled || missingReferences.length > 0 || !$('modelSelect').value || Boolean($('prompt').value.trim());
   for (const id of ['modelSelect','agent','workspace','saveContext','systemPrompt','chatMode','planMode','taskMode']) $(id).disabled = disabled;
   for (const id of ['attach', 'attachPreview', 'attachSelection', 'referenceFile']) $(id).disabled = disabled || referencesFull() || (id !== 'attach' && !fileScope);
   $('referenceFile').hidden = !fileScope;
@@ -135,6 +162,8 @@ function update() {
   $('chat').setAttribute('aria-busy', String(busy && !run.interaction));
   $('prompt').placeholder = canSteer(run) ? '补充要求，下一轮送达…' : busy ? '可先起草下一条消息…' : planning ? '描述你想先规划的改动…' : $('agent').checked ? '描述你想完成的任务…' : '输入消息…';
   renderReferences(disabled);
+  renderMissingReferences(disabled);
+  persistDraft(viewKey(), composerDraft());
   $('composerHint').textContent = canSteer(run) ? '补充要求会随下一次模型请求送达' : busy ? '任务结束后即可发送' : providers.length ? (prefs.sendKey === 'modifier' ? '⌘ / Ctrl + Enter 发送 · Enter 换行' : 'Enter 发送 · Shift + Enter 换行') : '对话需连接模型，接口检测可直接使用';
   document.querySelectorAll('#history button, #projectList button, #runningList button').forEach(button => { button.disabled = locked; });
   document.querySelectorAll('[data-prompt]').forEach(button => { button.disabled = disabled; });
@@ -467,15 +496,18 @@ function changeView(item, projectId, focus = true) {
   presence.cancelSpeech();
   presence.voiceHint();
   const key = viewKey();
-  const text = ConnectionIntent.mask($('prompt').value);
-  if (text || attachments.length || (!current && (skillIds.length || systemEdits.has(key)))) {
-    unsent.set(key, { text, attachments, skillIds, providerId: $('modelSelect').value, agent: $('agent').checked, planning });
+  const draft = composerDraft();
+  draft.text = ChatDrafts.mask(draft.text);
+  persistDraft(key, draft);
+  if (draft.text || attachments.length || missingReferences.length || (!current && (skillIds.length || systemEdits.has(key)))) {
+    unsent.set(key, draft);
   }
   else unsent.delete(key);
   if (current) scrollPositions.set(key, previewScroll ? previewScroll.top : nearBottom() ? null : $('scrollArea').scrollTop);
   current = item;
   selectedProjectId = projectId;
-  const saved = unsent.get(viewKey());
+  const saved = unsent.get(viewKey()) || ChatDrafts.read(localStorage, viewKey());
+  missingReferences = saved?.missing || [];
   if (!current) {
     $('modelSelect').value = providers.some(p => p.id === saved?.providerId) ? saved.providerId : newChatModel();
     if (saved) {
@@ -785,7 +817,11 @@ function addReference(file) {
     const previous = attachments.find(item => item.name === file.name && item.bytes === file.bytes);
     void api.attachment.clear(previous.id);
     attachments = attachments.map(item => item === previous ? file : item);
-  } else attachments = [...attachments, file];
+  } else {
+    attachments = [...attachments, file];
+    const index = missingReferences.indexOf(ChatDrafts.label(file.name));
+    if (index !== -1) missingReferences = missingReferences.filter((_, i) => i !== index);
+  }
 }
 function syncWorkspace(scope) {
   const workspace = current?.workspace || scope?.workspace;
@@ -1144,6 +1180,7 @@ async function ensureConversation(localOnly = false) {
     const agent = $('agent').checked, systemPrompt = $('systemPrompt').value;
     const homeKey = viewKey();
     upsert(await api.conversations.create({providerId:$('modelSelect').value, projectId: selectedProjectId}), true);
+    if (persistDraft(current.id, composerDraft())) persistDraft(homeKey, null);
     unsent.delete(homeKey);
     if (systemEdits.delete(homeKey)) systemEdits.set(current.id, systemPrompt);
     if (taskPaneOpen) openInspectors.set(current.id, inspectorTab);
@@ -1673,8 +1710,9 @@ function handleRunEvent(event) {
       } else {
         const draft = unsent.get(conversationId);
         if (draft) {
-          if (!submission.resume && draft.text === submission.sourceText) draft.text = '';
+          if (!submission.resume && submission.sourceText !== null && draft.text === ChatDrafts.mask(submission.sourceText)) draft.text = '';
           draft.attachments = draft.attachments?.filter(item => !submission.attachmentIds.includes(item.id));
+          persistDraft(conversationId, draft);
         }
       }
     }
@@ -1770,7 +1808,7 @@ const unsubscribe = api.chat.onEvent(event => {
   if (initialEvents) initialEvents.push(event);
   else handleRunEvent(event);
 });
-window.addEventListener('beforeunload', unsubscribe);
+window.addEventListener('beforeunload', () => { persistDraft(viewKey(), composerDraft()); unsubscribe(); });
 $('composer').onsubmit = event => {
   event.preventDefault();
   const run = currentRun();
@@ -1795,14 +1833,22 @@ async function submitUpdate(run, immediate = false) {
   try {
     await api.chat.update({ conversationId: run.conversationId, requestId: run.requestId, text, immediate });
     if (current?.id === run.conversationId && $('prompt').value === source) $('prompt').value = '';
-    else if (current?.id !== run.conversationId && unsent.get(run.conversationId)?.text === source) unsent.get(run.conversationId).text = '';
+    else if (current?.id !== run.conversationId) {
+      const draft = unsent.get(run.conversationId);
+      if (draft?.text === ChatDrafts.mask(source)) {
+        draft.text = '';
+        persistDraft(run.conversationId, draft);
+      }
+    }
   } catch (error) {
     if (current?.id === run.conversationId) showError(error);
   } finally { run.submittingUpdate = false; update(); }
 }
 $('resumeTask').onclick = () => sendMessage('继续上次未完成的任务', true);
-async function sendMessage(text, resume = false, media = []) {
+async function sendMessage(text, resume = false, media = [], fromComposer = true) {
   if (currentRun() || locked || !text) return;
+  if (missingReferences.length) { $('recoverReference').focus(); return; }
+  const sourceText = fromComposer && !resume ? $('prompt').value : null;
   const intent = !resume && ConnectionIntent.detect(text);
   if (intent) {
     $('prompt').value = ConnectionIntent.mask($('prompt').value);
@@ -1821,7 +1867,7 @@ async function sendMessage(text, resume = false, media = []) {
     systemEdits.delete(conversationId);
     const requestId = crypto.randomUUID();
     const attachmentIds = attachments.map(item => item.id);
-    submission = { conversationId, requestId, attachmentIds, resume, sourceText: $('prompt').value, starting: true, status: '正在准备' };
+    submission = { conversationId, requestId, attachmentIds, resume, sourceText, starting: true, status: '正在准备' };
     runs.set(conversationId, submission);
     result = api.chat.send({ conversationId, text, attachmentIds, requestId, resume, media });
   } catch (error) { showError(error); }
@@ -1873,6 +1919,18 @@ async function initialize() {
   ]);
   initialEvents = null;
   for(const result of results)if(result.status==='rejected')showError(result.reason);
+  // Initialization renders multiple times. Restore before enabling the first write.
+  const homeDraft = ChatDrafts.read(localStorage, viewKey());
+  if (homeDraft) {
+    $('prompt').value = homeDraft.text;
+    missingReferences = homeDraft.missing;
+    $('agent').checked = homeDraft.agent;
+    planning = homeDraft.planning;
+    if (providers.some(item => item.id === homeDraft.providerId)) $('modelSelect').value = homeDraft.providerId;
+    skillIds = homeDraft.skillIds.filter(id => skills.some(item => item.id === id));
+    updateMode();
+  }
+  draftsReady = true;
   locked=false;update();if (!presence.isHome()) focusPrompt();
 }
 installSilkStrands($('conversationField'), { travellingLights: true });

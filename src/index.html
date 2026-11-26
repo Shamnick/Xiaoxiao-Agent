@@ -197,8 +197,14 @@
               <button type="button" id="workspace" class="quiet workspace" title="选择此对话的工作目录"><span class="ui-icon i-folder" aria-hidden="true"></span> <span id="workspaceLabel">工作目录</span></button>
             </div>
             <div id="attachmentLabel" class="reference-list" aria-label="已选择的引用" role="group" hidden></div>
+            <div id="missingReferences" class="draft-references" hidden>
+              <span id="draftReferenceHint" role="status"></span>
+              <button id="recoverReference" type="button" class="quiet">重新添加</button>
+              <button id="forgetReferences" type="button" class="quiet">忽略缺失引用</button>
+            </div>
+            <p id="draftStorageIssue" class="draft-storage-issue" role="status" hidden>本机草稿保存失败，请在退出前复制文字。</p>
             <label class="sr-only" for="prompt">输入消息</label>
-            <textarea id="prompt" rows="1" maxlength="64000" aria-describedby="composerHint" placeholder="描述你想完成的任务…"></textarea>
+            <textarea id="prompt" rows="1" maxlength="64000" aria-describedby="composerHint draftReferenceHint" placeholder="描述你想完成的任务…"></textarea>
             <div class="composer-row">
               <button type="button" id="composerToolsButton" class="icon-button" aria-label="附件与上下文" title="附件与上下文" popovertarget="composerTools"><span class="ui-icon i-plus" aria-hidden="true"></span></button>
               <div id="composerTools" class="composer-tools" popover="auto" role="group" aria-label="附件与上下文">
@@ -865,6 +871,7 @@
   <script src="renderer-metrics.js"></script>
   <script src="connection-intent.js"></script>
   <script src="renderer-connection.js"></script>
+  <script src="chat-drafts.js"></script>
   <script src="renderer.js"></script>
   <script src="renderer-media.js"></script>
   <script src="renderer-generation.js"></script>

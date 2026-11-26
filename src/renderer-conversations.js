@@ -149,6 +149,7 @@ function installSessionActions() {
     if (current?.id === id) changeView(null, selectedProjectId);
     else { renderConversationHeader(); refreshReplyVersions(); renderHistory(); }
     ProofInstructions.forgetConversation(localStorage, id);
+    persistDraft(id, null);
     unsent.delete(id);
     systemEdits.delete(id);
     openInspectors.delete(id);

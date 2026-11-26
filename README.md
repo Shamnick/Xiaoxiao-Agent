@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/Shamnick/Xiaoxiao-Agent/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/Shamnick/Xiaoxiao-Agent/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version 0.6.15" src="https://img.shields.io/badge/version-0.6.15-584985">
+  <img alt="Version 0.6.16" src="https://img.shields.io/badge/version-0.6.16-584985">
   <img alt="Electron" src="https://img.shields.io/badge/desktop-Electron-183449">
   <img alt="macOS Apple Silicon" src="https://img.shields.io/badge/source%20tested-macOS%20Apple%20Silicon-6a8b7c">
 </p>
@@ -30,7 +30,7 @@ Xiaoxiao Agent 是一个独立开发的多模型桌面工作空间。打开本�
 
 ![对话、创作中心、设置和局部改稿的浅深色界面](docs/images/silk-workspaces.jpg)
 
-> 界面截图使用演示数据。0.6.15 已在 Apple Silicon Mac 验证源码运行。正式安装仍待签名和公证。任务工具需要模型支持工具调用，视觉实验室需要支持图像输入的模型。
+> 界面截图使用演示数据。0.6.16 已在 Apple Silicon Mac 验证源码运行。正式安装仍待签名和公证。任务工具需要模型支持工具调用，视觉实验室需要支持图像输入的模型。
 
 点开首页丝结，进入「试试局部改稿」。可以只改海报标题，比较后采纳，预览并导出 PNG 海报，再把满意的一句送到语音工作室。在 Mac 上选择系统语音即可导出 WAV。已取得任务号的视频，重启后也能从历史继续查询。生图会话里可导入参考图，也可选中历史图片继续修改，在同一画布比较并导出原图。[分期进度](docs/innovation-roadmap.md)
 
@@ -58,7 +58,7 @@ Xiaoxiao Agent 是一个独立开发的多模型桌面工作空间。打开本�
 | **自定义 API** | 配置 Base URL、API Key、模型 ID，支持测试连接与获取模型列表。普通对话可直接检测兼容接口并保存 HTML 报告 |
 | **流式对话** | 增量回复、Markdown 展示、多轮上下文和停止生成 |
 | **并行任务** | 最多同时运行三个会话，可逐个停止、补充或确认。单个任务也可并行分析最多三份独立资料，再汇总结果 |
-| **本地会话** | 自动保存、重启恢复、按回复创建独立分支、重命名、置顶、删除和 Markdown 导出 |
+| **本地会话** | 各会话分别恢复未发送草稿、按回复创建独立分支、重命名、置顶、删除和 Markdown 导出 |
 | **开发工作台** | 打开项目后按 `⌘2` 进入三栏工作台。支持在项目内新建文件、跨标签撤销、语法提示、保存冲突检查、项目 PTY 终端和本机网页预览 |
 | **AI 编辑** | 在光标处补写、按项目启用随键入补写、以自然语言改写选区。采纳建议后由你保存 |
 | **搜索与引用** | 搜索项目文件和内容并跳到匹配行。用 `@` 或编辑器选区加入消息 |

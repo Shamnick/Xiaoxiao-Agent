@@ -102,6 +102,10 @@
 .project-search-result :is(strong, small, code) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .project-search-result code { color: var(--muted); font: 12px/1.55 var(--font-code); }
 
+.draft-references { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 4px; background: var(--inset); border-radius: 8px; }
+.draft-references > span { flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; color: var(--text); font-size: 13px; }
+.draft-references button { min-height: 32px; }
+.draft-storage-issue { margin: 4px; color: var(--text); font-size: 13px; }
 .reference-list { display: flex; flex-wrap: wrap; gap: 5px; padding: 1px 2px 4px; }
 .reference-chip { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: min(100%, 300px); padding-left: 8px; border-radius: 6px; background: var(--inset); font-size: 12px; }
 .reference-chip > span:nth-child(2) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
