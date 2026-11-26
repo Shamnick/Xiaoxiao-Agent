@@ -59,7 +59,14 @@ function createPresence() {
     $('dictationHint').textContent = message;
     $('dictationHint').hidden = !message;
   }
+  let stopMonitor;
+  function stopMonitoring() {
+    stopMonitor?.();
+    stopMonitor = null;
+    $('voiceMonitorActive').hidden = true;
+  }
   function cancelSpeech() {
+    stopMonitoring();
     if (lastUtterance) window.speechSynthesis?.cancel();
     lastUtterance = null;
   }
@@ -70,7 +77,7 @@ function createPresence() {
   }
   $('speakReply').hidden = !window.speechSynthesis;
   $('speakReply').onclick = () => setVoiceEnabled(!voiceEnabled);
-  $('dictate').onclick = async () => {
+  async function startDictation() {
     if (locked) return;
     cancelSpeech();
     $('prompt').focus();
@@ -84,16 +91,35 @@ function createPresence() {
         ? '请在系统听写结束后确认文字并发送。若未启动，可在系统设置 → 键盘中启用听写。'
         : '请激活窗口后再试，也可以使用系统听写快捷键。');
     } catch { voiceHint('系统听写暂时不可用。你可以继续打字。'); }
-  };
+  }
+  $('dictate').onclick = startDictation;
   function readReply(turn) {
     if (!voiceEnabled || document.hidden || isHome() || !$('generationStudio').hidden ||
         document.querySelector('dialog[open]') || turn?.role !== 'assistant' || !turn.content || turn.failed) return;
     cancelSpeech();
     const utterance = new SpeechSynthesisUtterance(turn.content);
     lastUtterance = utterance;
-    utterance.onend = () => { if (lastUtterance === utterance) lastUtterance = null; };
+    if (mac && prefs.voiceInterruption === 'microphone') {
+      utterance.onstart = () => {
+        if (lastUtterance !== utterance || document.hidden || !document.hasFocus()) return;
+        stopMonitoring();
+        stopMonitor = monitorSpokenReply(() => {
+          if (lastUtterance !== utterance) return;
+          cancelSpeech();
+          if (!document.hidden && document.hasFocus() && !isHome() && $('generationStudio').hidden &&
+              !document.querySelector('dialog[open]')) void startDictation();
+        }, () => {
+          if (lastUtterance === utterance) {
+            stopMonitoring();
+            voiceHint('麦克风暂不可用。可点听写按钮打断，或键入消息。');
+          }
+        }, () => { $('voiceMonitorActive').hidden = false; });
+      };
+    }
+    utterance.onend = () => { if (lastUtterance === utterance) { stopMonitoring(); lastUtterance = null; } };
     utterance.onerror = event => {
       if (lastUtterance !== utterance) return;
+      stopMonitoring();
       lastUtterance = null;
       if (!['canceled', 'interrupted'].includes(event.error)) voiceHint('系统朗读暂时不可用，回复已显示在会话中。');
     };
@@ -202,7 +228,12 @@ function createPresence() {
       showWorkspace(true);
     }
   }, true);
+  document.addEventListener('toggle', event => {
+    if (event.target instanceof HTMLDialogElement && event.target.open) cancelSpeech();
+  }, true);
+  window.addEventListener('blur', cancelSpeech);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancelSpeech(); });
   window.addEventListener('pagehide', () => { ++generation; clearTimeout(sampleTimer); cancelSpeech(); });
   syncSampling();
-  return { isHome, showWorkspace, enterConversation, syncDrawer, focus, readReply, cancelSpeech, voiceHint };
+  return { isHome, showWorkspace, enterConversation, syncDrawer, focus, readReply, cancelSpeech, stopMonitoring, voiceHint };
 }

@@ -32,14 +32,18 @@ async function prepareTrial(root, args) {
 }
 
 async function main() {
-  await fs.access(installedApp, fs.constants.X_OK).catch(() => {
+  const args = process.argv.slice(2);
+  const source = args[0] === '--source';
+  if (source) args.shift();
+  const executable = source ? require('electron') : installedApp;
+  await fs.access(executable, fs.constants.X_OK).catch(() => {
     throw Error('请先将 Xiaoxiao Agent 安装到 Mac 的「应用程序」。');
   });
-  const { profile, env } = await prepareTrial(trialRoot, process.argv.slice(2));
+  const { profile, env } = await prepareTrial(trialRoot, args);
   const id = path.basename(profile);
   console.log('本次试用 ' + id + '\n本机试用目录 ' + profile);
-  console.log('接续本轮可运行 npm run trial:phase-one -- --resume ' + id);
-  const child = spawn(installedApp, [], { env, stdio: 'inherit' });
+  console.log((source ? '源码试用' : '安装版试用') + '。接续本轮可运行 npm run trial:phase-one -- ' + (source ? '--source ' : '') + '--resume ' + id);
+  const child = spawn(executable, source ? ['.'] : [], { cwd: path.resolve(__dirname, '..'), env, stdio: 'inherit' });
   const [code, signal] = await once(child, 'close');
   if (signal || code !== 0) throw Error('试用窗口已中断。可用上方命令重新打开这一轮。');
 }

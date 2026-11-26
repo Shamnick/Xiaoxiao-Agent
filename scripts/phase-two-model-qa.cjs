@@ -18,7 +18,8 @@ const scenarioNames = ['normal', 'redirect', 'cancel', 'recover'];
 const brief = '秋季工作坊将在一楼展厅举行，日期周四，预算 500 元。请用这些材料制作一页 PDF，请用简体中文并保存为 workshop.pdf。';
 const revision = '改到周五，删去预算和金额，保留活动名和地点。只交付修改后的 PDF。';
 const live = process.argv.slice(2).includes('--live');
-if (process.argv.slice(2).some(arg => arg !== '--live')) throw Error('仅支持 --live，默认运行本地测试。');
+const sourceBuild = process.argv.slice(2).includes('--source');
+if (process.argv.slice(2).some(arg => !['--live', '--source'].includes(arg))) throw Error('支持 --live 和 --source，默认对安装版运行本地测试。');
 
 async function fixture() {
   const server = http.createServer(async (req, res) => {
@@ -63,7 +64,8 @@ async function instrument({app, safeStorage, dialog, shell}, opts) {
   const headers = {};
   if (live) {
     const row = JSON.parse(io.readFileSync(profile,'utf8'))[0];
-    headers.Authorization = 'Bearer ' + safeStorage.decryptString(Buffer.from(row.apiKey,'base64'));
+    try { headers.Authorization = 'Bearer ' + safeStorage.decryptString(Buffer.from(row.apiKey,'base64')); }
+    catch { throw Error('当前验收进程无法读取此连接的钥匙串密钥，请在可使用该连接的已签名安装版复验'); }
   }
   const getUsage = async (preflight = true) => {
     const response = await nativeFetch(new URL('/v1/usage',baseUrl),{headers,redirect:'error',signal:AbortSignal.timeout(12000)});
@@ -117,7 +119,7 @@ async function instrument({app, safeStorage, dialog, shell}, opts) {
     io.appendFileSync(ledger,JSON.stringify({scenario:name,at:start,restarted})+'\n');
     calls++;
     firstRequestAt ??= start;
-    const response=await nativeFetch(url,{...init,body:serialized});
+    const response=await nativeFetch(url,{...init,body:serialized,redirect:'error'});
     firstResponseAt ??= Date.now();
     // Synchronize the UI action at a real HTTP response. Do not synthesize or
     // alter model content. Cancellation of the app fetch cancels the old stream.
@@ -149,7 +151,7 @@ async function main() {
   const reportDir=await fs.mkdtemp(path.join(reportRoot,'run-'));
   const ledger=path.join(reportDir,'requests.jsonl');
   await fs.writeFile(ledger,'',{mode:0o600,flag:'wx'});
-  const report={model,mode:live?'live':'fixture',cases:[],requests:0};
+  const report={model,mode:live?'live':'fixture',build:sourceBuild?'source':'packaged',cases:[],requests:0};
   const unitRate=Number(process.env.XIAOXIAO_QA_CNY_PER_UNIT_CEILING);
   const expectedUnit=process.env.XIAOXIAO_QA_BILLING_UNIT;
   const costBoundFen = Number(process.env.XIAOXIAO_QA_MAX_FEN_PER_REQUEST || 0);
@@ -185,7 +187,7 @@ async function main() {
       local=await fixture();
       provider={id:'qa',model,kind:'openai-compatible',name:'本地夹具',baseUrl:local.baseUrl,stream:true};
     }
-    const executablePath=process.env.XIAOXIAO_SMOKE_EXECUTABLE || '/Applications/Xiaoxiao Agent.app/Contents/MacOS/Xiaoxiao Agent';
+    const executablePath=sourceBuild ? undefined : process.env.XIAOXIAO_SMOKE_EXECUTABLE || '/Applications/Xiaoxiao Agent.app/Contents/MacOS/Xiaoxiao Agent';
     for (const name of scenarioNames) {
       const result={name,passed:false};
       report.cases.push(result);
@@ -202,7 +204,7 @@ async function main() {
       const launch=async restarted=>{
         const env={...process.env,XIAOXIAO_SMOKE_DIR:data};
         delete env.ELECTRON_RUN_AS_NODE;
-        app=await electron.launch({executablePath,args:[],env});
+        app=await electron.launch({executablePath,args:sourceBuild?['.']:[],cwd:root,timeout:20000,env});
         page=await app.firstWindow();
         page.setDefaultTimeout(60000);
         await page.evaluate(()=>{

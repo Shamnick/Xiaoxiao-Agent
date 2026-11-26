@@ -234,6 +234,7 @@
               <button type="button" id="stop" class="icon-button stop" title="停止生成" aria-label="停止生成" hidden><span class="ui-icon i-stop" aria-hidden="true"></span></button>
               <button id="send" class="primary send" aria-label="发送消息" title="发送消息" type="submit" disabled><span class="ui-icon i-send" aria-hidden="true"></span></button>
             </div>
+            <p id="voiceMonitorActive" role="status" hidden>正在听插话 · 开口可停止朗读</p>
             <p id="dictationHint" role="status" hidden></p>
           </form>
           <div class="suggestions" role="group" aria-label="快速开始">
@@ -551,11 +552,12 @@
           </fieldset>
           <label>对话背景<select id="conversationScene"><option value="silk">丝结光纹</option><option value="workspace">纯净背景</option></select></label>
           <label>回复字体<select id="readingFont"><option value="serif">书籍衬线</option><option value="system">系统无衬线</option></select></label>
-          <label>回复字号<select id="textSize"><option value="small">小</option><option value="">模型默认</option><option value="standard">标准</option><option value="large">大</option></select></label>
+          <label>回复字号<select id="textSize"><option value="small">小</option><option value="standard">标准</option><option value="large">大</option></select></label>
         </div>
         <h3>新会话与输入</h3>
         <div class="preference-group">
           <label>新会话默认模型<select id="defaultModel"></select></label>
+          <label id="voiceInterruptionSetting">朗读时插话<select id="voiceInterruption"><option value="manual">点听写按钮打断</option><option value="microphone">开口打断 · 使用麦克风</option></select></label>
           <label>发送消息<select id="sendKey"><option value="enter">Enter 发送</option><option value="modifier">⌘ / Ctrl + Enter 发送</option></select></label>
         </div>
       </section>
@@ -715,13 +717,16 @@
             <div class="generation-stage-footer"><span id="generationResultInfo">尚未生成作品</span><span class="generation-stage-shortcuts"><kbd id="generationKeyHint">Ctrl ↵</kbd> 生成</span></div>
           </section>
         <form id="generationComposer" class="generation-composer">
+          <div id="generationReferenceBar" class="generation-reference-bar" hidden><span class="ui-icon i-image" aria-hidden="true"></span><span id="generationReferenceLabel"></span><button id="removeGenerationReference" type="button" class="quiet" aria-label="移除参考图">移除</button></div>
+          <input id="generationReferenceFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
           <div class="generation-composer-top"><span id="generationPromptLabel">画面描述</span><span id="generationPromptCount">0 / 8,000</span></div>
           <label id="generationPromptFieldLabel" class="sr-only" for="generationImagePrompt">创作提示词</label><textarea id="generationImagePrompt" rows="3" maxlength="8000" placeholder="描述主体、风格、构图、光线和氛围…"></textarea>
-          <div class="generation-composer-bottom"><div class="generation-composer-tools"><button id="generationPreset" class="quiet" type="button" popovertarget="generationPresetMenu"><span class="ui-icon i-sparkles" aria-hidden="true"></span> 灵感模板</button><button id="generateSpeechExcerpt" class="quiet" type="button" hidden><span class="ui-icon i-audio" aria-hidden="true"></span> <span id="speechExcerptLabel">生成本段</span></button><button id="generationPromptEnhance" class="quiet" type="button"><span class="ui-icon i-sparkles" aria-hidden="true"></span> 补充要点</button></div><span class="composer-spacer"></span><button id="cancelCreationEdit" class="quiet" type="button" hidden>取消编辑</button><button id="cancelGeneration" class="quiet danger" type="button" hidden><span class="ui-icon i-stop" aria-hidden="true"></span> 停止</button><button id="runGeneration" class="primary generation-submit" type="submit"><span class="ui-icon i-send" aria-hidden="true"></span> 开始生成</button></div>
+          <div class="generation-composer-bottom"><div class="generation-composer-tools"><button id="generationPreset" class="quiet" type="button" popovertarget="generationPresetMenu"><span class="ui-icon i-sparkles" aria-hidden="true"></span> 灵感模板</button><button id="importGenerationReference" type="button" class="quiet" title="从本机导入一张参考图"><span class="ui-icon i-image" aria-hidden="true"></span>参考图</button><button id="generateSpeechExcerpt" class="quiet" type="button" hidden><span class="ui-icon i-audio" aria-hidden="true"></span> <span id="speechExcerptLabel">生成本段</span></button><button id="generationPromptEnhance" class="quiet" type="button"><span class="ui-icon i-sparkles" aria-hidden="true"></span> 补充要点</button></div><span class="composer-spacer"></span><button id="cancelCreationEdit" class="quiet" type="button" hidden>取消编辑</button><button id="cancelGeneration" class="quiet danger" type="button" hidden><span class="ui-icon i-stop" aria-hidden="true"></span> 停止</button><button id="runGeneration" class="primary generation-submit" type="submit"><span class="ui-icon i-send" aria-hidden="true"></span> 开始生成</button></div>
         </form>
           </div>
           <aside id="creationInspector" class="generation-inspector" aria-label="生成参数">
             <div class="generation-inspector-heading"><div><h3 id="creationInspectorTitle">生成设置</h3></div><button id="resetGenerationSettings" class="icon-button" type="button" aria-label="重置生成设置" title="重置生成设置"><span class="ui-icon i-refresh" aria-hidden="true"></span></button></div>
+            <p id="generationEvidence" class="generation-evidence" role="status"></p>
             <section id="generationPanelImage" class="generation-panel" role="tabpanel" aria-labelledby="generationTabImage">
               <div class="generation-fields">
                 <label class="generation-span">模型<select id="generationImageModel"></select></label>
@@ -729,7 +734,8 @@
                 <label>质量<select id="generationImageQuality"><option value="">模型默认</option><option value="standard">标准</option><option value="hd">高清</option></select></label>
                 <label>输出数量<select id="generationImageCount"><option value="1">1 张</option><option value="2">2 张</option><option value="4">4 张</option></select></label>
                 <label>风格<select id="generationImageStyle"><option value="">模型默认</option><option value="natural">自然</option><option value="vivid">鲜明</option><option value="cinematic">电影感</option><option value="illustration">插画</option></select></label>
-                <label class="generation-span generation-muted-field">接口路径<input id="generationImageEndpoint" value="/images/generations" spellcheck="false"></label>
+                <label class="generation-span generation-muted-field">生成接口<input id="generationImageEndpoint" value="/images/generations" spellcheck="false"></label>
+                <label class="generation-span generation-muted-field" id="generationEditRoute" hidden>编辑接口<input id="generationImageEditEndpoint" value="/images/edits" spellcheck="false"></label>
                 <label class="generation-span">排除内容<textarea id="generationImageNegative" rows="2" maxlength="2000" placeholder="可选，例如：模糊、文字、水印…"></textarea></label>
                 <details class="generation-advanced generation-span"><summary>高级请求参数</summary><textarea id="generationImageOptions" aria-label="高级 JSON 参数" rows="4" spellcheck="false" placeholder='{"seed":42}'></textarea></details>
               </div>
@@ -743,7 +749,7 @@
                 <label>音频提示<select id="generationVideoAudio"><option value="auto">自动</option><option value="on">开启</option><option value="off">关闭</option></select></label>
                 <label class="generation-span generation-muted-field">接口路径<input id="generationVideoEndpoint" value="/videos" spellcheck="false"></label>
                 <label class="generation-span">排除内容<textarea id="generationVideoNegative" rows="2" maxlength="2000" placeholder="可选，例如：跳帧、抖动、字幕…"></textarea></label>
-                <details class="generation-advanced generation-span"><summary>任务与高级参数</summary><input id="generationVideoPollEndpoint" aria-label="视频任务查询路径" placeholder="任务查询路径，例如 /videos/{id}" spellcheck="false"><input id="generationVideoContentEndpoint" aria-label="视频下载路径" placeholder="视频下载路径，例如 /videos/{id}/content" spellcheck="false"><textarea id="generationVideoOptions" aria-label="高级 JSON 参数" rows="3" spellcheck="false" placeholder='{"seed":42}'></textarea></details>
+                <details class="generation-advanced generation-span"><summary>任务与高级参数</summary><input id="generationVideoPollEndpoint" aria-label="视频任务查询路径" placeholder="任务查询路径，例如 /videos/{id}" spellcheck="false"><input id="generationVideoContentEndpoint" aria-label="视频下载路径" placeholder="视频下载路径，例如 /videos/{id}/content" spellcheck="false"><input id="generationVideoCancelEndpoint" aria-label="视频取消路径（POST）" placeholder="取消路径（可选 POST），例如 /videos/{id}/cancel" spellcheck="false"><textarea id="generationVideoOptions" aria-label="高级 JSON 参数" rows="3" spellcheck="false" placeholder='{"seed":42}'></textarea></details>
               </div>
             </section>
             <section id="generationPanelAudio" class="generation-panel" role="tabpanel" aria-labelledby="generationTabAudio" hidden>
@@ -815,6 +821,7 @@
       <span id="galleryPosition" role="status"></span>
       <div class="gallery-tools">
         <button id="galleryCompare" class="gallery-mode" type="button" aria-pressed="false" hidden><span class="ui-icon i-split" aria-hidden="true"></span>版本对比</button>
+        <button id="galleryUseReference" class="quiet" type="button">用作参考图</button>
         <button id="galleryScale" class="quiet" type="button" aria-pressed="false">原始尺寸</button>
         <button id="gallerySave" class="icon-button" type="button" title="导出当前图片" aria-label="导出当前图片"><span class="ui-icon i-download" aria-hidden="true"></span></button>
         <button id="galleryClose" class="icon-button" type="button" title="关闭预览" aria-label="关闭预览"><span class="ui-icon i-close" aria-hidden="true"></span></button>
@@ -851,6 +858,7 @@
   <script src="silk-surface.js"></script>
   <script src="silk-particles.js"></script>
   <script src="silk-field.js"></script>
+  <script src="renderer-barge-in.js"></script>
   <script src="renderer-presence.js"></script>
   <script src="conversation-scene.js"></script>
   <script src="session-navigator.js"></script>

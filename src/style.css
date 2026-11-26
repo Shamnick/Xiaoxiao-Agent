@@ -970,3 +970,16 @@ body:has(#generationStudio:not([hidden])) > :is(.main, #sidebar, #toggleSidebar)
 .gallery-canvas img { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: contain; }
 .gallery-load { color: var(--muted); font-size: 13px; }
 .gallery-prompt { margin: 10px 2px 0; max-height: 4.5em; overflow: auto; overflow-wrap: anywhere; font-size: 13px; }
+
+
+.generation-reference-bar { display: flex; align-items: center; gap: 8px; padding: 6px 0 2px; color: var(--muted); font-size: 12px; }
+.generation-reference-bar .ui-icon { flex: none; }
+#generationReferenceLabel { min-width: 0; overflow-wrap: anywhere; }
+.generation-reference-bar button { margin-inline-start: auto; flex: none; }
+
+.generation-evidence { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+
+.creation-frame:has(.has-reference) #creationField { display: none; }
+.generation-empty.has-reference { max-width: 100%; }
+.generation-empty.has-reference img { max-height: min(30vh, 320px); max-width: 100%; object-fit: contain; border-radius: 8px; }
+.generation-empty.has-reference strong { font-size: 15px; overflow-wrap: anywhere; }

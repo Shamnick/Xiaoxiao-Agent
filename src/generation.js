@@ -44,8 +44,8 @@ async function readLimited(response, limit, label) {
   return Buffer.concat(chunks, total);
 }
 
-async function jsonResponse(response) {
-  const raw = await readLimited(response, MAX_JSON, '生成服务响应');
+async function jsonResponse(response, limit = MAX_JSON) {
+  const raw = await readLimited(response, limit, '生成服务响应');
   try { return JSON.parse(raw.toString('utf8')); }
   catch { throw Error('生成服务返回的 JSON 无法解析'); }
 }
@@ -128,12 +128,48 @@ function wait(ms, signal) {
   });
 }
 
+function detectImage(bytes) {
+  if (bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return 'image/png';
+  if (bytes.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex'))) return 'image/jpeg';
+  if (bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
+
+function normalizeImage(asset) {
+  const mimeType = detectImage(Buffer.from(asset.data.slice(0, 24), 'base64'));
+  if (!mimeType) throw Error('生成服务没有返回 PNG、JPEG 或 WebP 图片');
+  return { ...asset, mimeType, filename: 'xiaoxiao-image.' + (mimeType === 'image/jpeg' ? 'jpg' : mimeType.slice(6)) };
+}
+
+function imageEditForm(reference, fields) {
+  const { mimeType, data } = reference || {};
+  const limit = 16 * 1024 * 1024;
+  if (typeof data !== 'string' || data.length > 4 * Math.ceil(limit / 3) ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) throw Error('参考图无效或超过 16 MiB');
+  const bytes = Buffer.from(data, 'base64');
+  const mime = detectImage(bytes);
+  if (!mime || mime !== mimeType || bytes.length > limit) throw Error('请选择 16 MiB 以内的 PNG、JPEG 或 WebP 原图');
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) {
+    if (['image', 'image[]', 'mask'].includes(key) || !['string', 'number', 'boolean'].includes(typeof value)) {
+      throw Error('参考图编辑仅支持标量参数，图片由所选原图提供');
+    }
+    form.set(key, String(value));
+  }
+  form.set('image', new Blob([bytes], { type: mime }), 'reference.' + mime.split('/')[1]);
+  return form;
+}
+
 async function generateAsset(provider, input, { signal, request = fetch, pollDelayMs = 2000, onStatus = () => {}, onSubmit = () => {}, onVideoId = () => {} } = {}) {
   if (!input || !['image', 'video', 'audio'].includes(input.kind)) throw Error('不支持的生成类型');
   const kind = input.kind;
   const prompt = String(input.prompt || '').trim();
   if (!prompt || prompt.length > 8000) throw Error('请输入 1 至 8000 个字符的生成内容');
-  const url = endpoint(provider.baseUrl, input.endpoint, defaults[kind]);
+  const editingImage = input.reference != null;
+  if (editingImage && (kind !== 'image' || input.destination?.baseUrl !== provider.baseUrl ||
+      input.destination?.model !== provider.model)) throw Error('参考图发送目标已更改，请重新选择模型后提交');
+  const url = editingImage ? endpoint(provider.baseUrl, input.editEndpoint, '/images/edits')
+    : endpoint(provider.baseUrl, input.endpoint, defaults[kind]);
   let requestPrompt = prompt;
   if (kind === 'image') {
     const stylePrompt = ({ cinematic: '电影感构图、层次光影与克制的色彩', illustration: '编辑插画风格、清晰形状语言与精致配色' })[input.style];
@@ -159,10 +195,17 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   if (input.options !== undefined) {
     if (!input.options || typeof input.options !== 'object' || Array.isArray(input.options)
       || JSON.stringify(input.options).length > 16000) throw Error('高级参数需要是有效 JSON 对象，且不超过 16 KiB');
+    if (editingImage && ['model', 'prompt'].some(key => Object.hasOwn(input.options, key))) {
+      throw Error('参考图的模型与提示词请在工作室中选择');
+    }
     Object.assign(body, input.options);
   }
   onStatus({ phase: 'submit', text: kind === 'video' ? '正在提交视频生成任务…' : '正在提交生成任务…' });
   const init = { method: 'POST', headers: headers(provider), body: JSON.stringify(body), signal, redirect: 'error' };
+  if (editingImage) {
+    init.body = imageEditForm(input.reference, body);
+    delete init.headers['content-type'];
+  }
   signal?.throwIfAborted();
   onSubmit();
   const response = await request(url, init);
@@ -170,14 +213,15 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   if (kind !== 'audio' && !(response.headers.get('content-type') || '').includes('json')) {
     const data = await mediaBytes(response, '生成结果');
     const mimeType = response.headers.get('content-type') || (kind === 'image' ? 'image/png' : 'video/mp4');
-    return { data: data.toString('base64'), mimeType, filename: kind === 'image' ? 'xiaoxiao-image.png' : 'xiaoxiao-video.mp4' };
+    const asset = { data: data.toString('base64'), mimeType, filename: 'xiaoxiao-video.mp4' };
+    return kind === 'image' ? normalizeImage(asset) : asset;
   }
   if (kind === 'audio' && !(response.headers.get('content-type') || '').includes('json')) {
     const data = await mediaBytes(response, '语音结果');
     const mimeType = body.response_format === 'mp3' ? 'audio/mpeg' : `audio/${body.response_format}`;
     return { data: data.toString('base64'), mimeType, filename: `xiaoxiao-audio.${body.response_format}` };
   }
-  const payload = await jsonResponse(response);
+  const payload = await jsonResponse(response, kind === 'image' ? 96 * 1024 * 1024 : MAX_JSON);
   const ids = kind === 'video' ? [payload?.id, payload?.task_id, payload?.data?.id] : [];
   const videoId = ids.find(id => (typeof id === 'string' || Number.isSafeInteger(id))
     && /^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,255}$/.test(String(id)));
@@ -186,12 +230,37 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   const outputs = responseAssets(payload, kind);
   if (kind === 'video' && outputs.some(asset => asset.url)) onStatus({ phase: 'download', text: '正在下载生成的视频…' });
   const assets = await materializeAssets(outputs, signal, request);
+  if (kind === 'image' && assets.length) {
+    const images = assets.map(normalizeImage);
+    return { ...images[0], assets: images };
+  }
   if (assets.length) return { ...assets[0], assets };
   if (videoId === undefined) {
     if (ids.some(id => id != null && id !== '')) throw Error('远程视频任务号无效');
     throw Error('生成服务没有返回可播放的结果');
   }
   return pollVideo(provider, input, String(videoId), { signal, request, pollDelayMs, onStatus });
+}
+
+function videoCancelUrl(baseUrl, route, videoId) {
+  if (typeof route !== 'string' || !route.includes('{id}') || /[?#]/.test(route) ||
+      !/^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,255}$/.test(videoId)) throw Error('取消路径需要包含 {id} 和原任务号');
+  return endpoint(baseUrl, route.replace('{id}', encodeURIComponent(videoId)), '');
+}
+
+async function cancelRemoteVideo(provider, route, videoId, {signal, request = fetch} = {}) {
+  const response = await request(videoCancelUrl(provider.baseUrl, route, videoId), {
+    method: 'POST', headers: headers(provider), body: '{}', signal, redirect: 'error'
+  });
+  if (!response.ok) throw Error('取消请求返回 HTTP ' + response.status + '，请查询原任务状态');
+  if (!(response.headers.get('content-type') || '').includes('json')) {
+    await response.body?.cancel();
+    return false;
+  }
+  const result = await jsonResponse(response);
+  const id = result?.id ?? result?.task_id ?? result?.data?.id;
+  return (id == null || String(id) === videoId) &&
+    ['canceled', 'cancelled'].includes(String(result?.status || result?.data?.status).toLowerCase());
 }
 
 async function pollVideo(provider, input, videoId, { signal, request = fetch, pollDelayMs = 2000, onStatus = () => {} } = {}) {
@@ -206,6 +275,11 @@ async function pollVideo(provider, input, videoId, { signal, request = fetch, po
     if (!poll.ok) throw Error(`视频任务查询失败 HTTP ${poll.status}`);
     const payload = await jsonResponse(poll);
     const status = String(payload.status || '').toLowerCase();
+    if (['cancelled', 'canceled'].includes(status) && (payload.id == null || String(payload.id) === String(videoId))) {
+      const error = Error('服务已确认取消视频任务');
+      error.code = 'VIDEO_CANCELED';
+      throw error;
+    }
     if (['failed', 'cancelled', 'canceled', 'error'].includes(status)) throw Error(payload.error?.message || '视频生成失败');
     const outputs = responseAssets(payload, kind);
     if (outputs.some(asset => asset.url)) onStatus({ phase: 'download', text: '正在下载生成的视频…' });
@@ -235,4 +309,4 @@ async function pollVideo(provider, input, videoId, { signal, request = fetch, po
   throw Error('视频生成超过 3 分钟仍未完成');
 }
 
-module.exports = { defaults, generateAsset, pollVideo };
+module.exports = { defaults, generateAsset, pollVideo, cancelRemoteVideo, videoCancelUrl };

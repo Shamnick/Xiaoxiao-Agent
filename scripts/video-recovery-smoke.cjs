@@ -29,6 +29,10 @@ async function waitForNetworkEvent(event, label) {
   let closedQuery;
   const server = http.createServer((req,res) => {
     seen.push(req.method + ' ' + req.url);
+    if (req.method === 'POST' && req.url === '/v1/videos/delivery-task/cancel') {
+      const status = delivery === 'confirm-cancel' ? 'cancelled' : 'pending';
+      return res.writeHead(200,{'content-type':'application/json'}).end(JSON.stringify({id:'delivery-task',status}));
+    }
     if (delivery) {
       if (req.method === 'POST' && req.url === '/v1/videos') {
         return res.writeHead(200, {'content-type':'application/json'}).end(JSON.stringify({
@@ -161,5 +165,36 @@ async function waitForNetworkEvent(event, label) {
     assert.deepEqual(seen.slice(start), ['POST /v1/videos', 'GET /first-download', status, status, content, status, status, content]);
     assert.equal(Object.values(await page.evaluate(() => nova.generation.receipts())).includes('accepted'), false);
     console.log('PASS: 1 POST, 4 status GETs, 3 download GETs, 0 requests to changed route. Recovered after 503, empty file, restart and stop; decoded 64×64 MP4 and matched exported bytes.');
+    await page.locator('#generationNew').click();
+    await page.locator('#generationPanelVideo summary').click();
+    await page.locator('#generationVideoCancelEndpoint').fill('/videos/{id}/cancel');
+    await page.locator('#generationVideoPrompt').fill('取消原服务任务');
+    await page.locator('#runGeneration').click();
+    const cancel = page.getByRole('button', {name:'取消服务端任务'});
+    await cancel.waitFor();
+    const offset = seen.length;
+    page.once('dialog', dialog => dialog.dismiss());
+    await cancel.click();
+    assert.equal(seen.length, offset);
+    db.write('providers', [{...connection, baseUrl:connection.baseUrl + '/changed'}]);
+    page.once('dialog', dialog => dialog.accept());
+    await cancel.click();
+    await page.locator('.creation-preview').filter({hasText:'原连接已更改'}).waitFor();
+    assert.equal(seen.length, offset);
+    db.write('providers', [connection]);
+    page.once('dialog', dialog => dialog.accept());
+    await cancel.click();
+    await page.locator('.creation-preview').filter({hasText:'服务尚未确认'}).waitFor();
+    delivery = 'confirm-cancel';
+    page.once('dialog', dialog => dialog.accept());
+    await cancel.click();
+    await page.locator('.creation-preview').filter({hasText:'服务已确认取消'}).waitFor();
+    await app.close();
+    page = await launch();
+    await page.locator('#generationHistory button').filter({hasText:'取消原服务任务'}).click();
+    await page.locator('.creation-preview').filter({hasText:'服务已确认取消'}).waitFor();
+    assert(await page.getByRole('button', {name:'继续查询原视频'}).isHidden());
+    assert.deepEqual(seen.slice(offset), Array(2).fill('POST /v1/videos/delivery-task/cancel'));
+    console.log('PASS: remote cancellation stayed on the original task and route; pending and confirmed results survived without resubmission.');
   } finally { await app?.close(); server.closeAllConnections(); server.close(); await fs.rm(dir,{recursive:true,force:true}); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

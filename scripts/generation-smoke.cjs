@@ -63,9 +63,18 @@ async function run() {
   const data = await fs.mkdtemp(path.join(os.tmpdir(), 'xiaoxiao-generation-smoke-'));
   let app, png, variants;
   const requests = [];
+  const edits = [];
   const imagePrompts = [], videoPrompts = [], audioPrompts = [];
   const server = createServer(async (req, res) => {
     requests.push(`${req.method} ${req.url}`);
+    if (req.url === '/v1/images/edits' && req.method === 'POST') {
+      const form = await new Response(req, {headers: req.headers}).formData();
+      const image = form.get('image');
+      edits.push({ prompt: form.get('prompt'), model: form.get('model'), name: image.name,
+        data: Buffer.from(await image.arrayBuffer()).toString('base64') });
+      return res.writeHead(200, { 'content-type': 'application/json' })
+        .end(JSON.stringify({data:[{b64_json:variants[1]}]}));
+    }
     if (req.method === 'POST') {
       let raw = '';
       for await (const chunk of req) raw += chunk;
@@ -150,6 +159,7 @@ async function run() {
       await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(1320, 860));
     }
 
+    await page.locator('#generationEvidence').filter({hasText:'未验证'}).waitFor();
     await page.locator('#generationPreset').click();
     await page.locator('#generationPresetMenu:popover-open').waitFor();
     assert.equal(await page.locator('#generationPresetMenu button').count(), 4);
@@ -164,6 +174,7 @@ async function run() {
     await page.locator('.generation-result').waitFor();
     assert.equal(await page.locator('.generation-result').getAttribute('alt'), '生成的图片 1');
     assert.equal(await page.locator('.generation-result').evaluate(image => image.naturalWidth), 560);
+    await page.locator('#generationEvidence').filter({hasText:'有可预览的作品'}).waitFor();
     await page.screenshot({ path: path.join(data, 'generation-image.png') });
 
     const saved = path.join(data, 'generated-image.png');
@@ -394,6 +405,54 @@ async function run() {
     await page.keyboard.press('Escape');
     await page.locator('#generationFocus').click();
     assert(await page.locator('#creationInspector').isVisible());
+    // An imported file is local until submit. A fresh thread has no attachment.
+    const uploads = page.locator('#generationReferenceFile');
+    const ref = page.locator('#generationReferenceLabel');
+    await uploads.setInputFiles({name:'封面.png', mimeType:'image/png', buffer:Buffer.from(png, 'base64')});
+    await ref.filter({hasText:'封面.png'}).waitFor();
+    await page.locator('#generationEvidence').filter({hasText:'未验证'}).waitFor();
+    assert.match(await ref.textContent(), /127\.0\.0\.1/);
+    await page.locator('#generationNew').click();
+    assert(await ref.isHidden());
+    await history.filter({hasText:'封面.png'}).click();
+    await ref.waitFor();
+    await page.reload();
+    await enterWorkspace(page);
+    await page.locator('#openGenerationStudio').click();
+    await history.filter({hasText:'封面.png'}).click();
+    assert.equal(edits.length, 0);
+    const original = page.getByRole('img', {name:'本轮参考图 · 封面.png'});
+    await original.waitFor();
+    assert.equal(await original.evaluate(img => img.src.split(',')[1]), png);
+    await imageField.fill('保留轮廓，改成暖色');
+    if (qa) {
+      await page.emulateMedia({colorScheme:'dark'});
+      await page.screenshot({path:path.join(qa,'reference-edit-dark.png'), scale:'css', animations:'disabled'});
+      await page.emulateMedia({colorScheme:'light'});
+      await page.screenshot({path:path.join(qa,'reference-edit-light.png'), scale:'css', animations:'disabled'});
+    }
+    await page.getByRole('button', {name:'提交改图'}).click();
+    await page.locator('.creation-turn').first().locator('img').waitFor();
+    assert.deepEqual(edits[0], {prompt:'保留轮廓，改成暖色', model:'fixture-generation',name:'reference.png',data:png});
+    assert(await ref.isHidden());
+    await page.locator('.creation-thumbnail').first().click();
+    await page.getByRole('button', {name:'用作参考图'}).press('Enter');
+    await ref.filter({hasText:'第 1 轮 · 图 1'}).waitFor();
+    await page.locator('#generationEvidence').filter({hasText:'有可预览的作品'}).waitFor();
+    await imageField.fill('只改背景');
+    await page.getByRole('button', {name:'提交改图'}).click();
+    await page.locator('.creation-turn').nth(1).locator('img').waitFor();
+    assert.equal(edits[1].data, variants[1]);
+    assert.equal(edits[1].prompt, '只改背景');
+    await page.locator('.creation-turn').first().getByRole('button', {name:'重新生成这一轮'}).click();
+    await page.locator('.creation-turn').nth(2).locator('img').waitFor();
+    assert.equal(edits[2].data, png);
+    await page.locator('.creation-turn').first().getByRole('button', {name:'编辑这轮提示词'}).click();
+    await ref.filter({hasText:'封面.png'}).waitFor();
+    await page.getByRole('button', {name:'移除参考图'}).click();
+    assert(await ref.isHidden());
+    await page.locator('#cancelCreationEdit').click();
+    console.log('PASS: Reference image import, draft recovery, multipart edits, version reuse, scoped retries and removal.');
     assert.deepEqual(errors, []);
     console.log('PASS: Image, video and speech generation, cross-round image comparison, keyboard navigation, scoped history and original-file exports.');
   } finally {

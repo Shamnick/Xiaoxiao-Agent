@@ -1338,7 +1338,9 @@ function applyPreferences(next) {
   document.documentElement.dataset.readingFont = prefs.readingFont;
   document.documentElement.dataset.textSize = prefs.textSize;
   for (const input of $('appearance').elements) input.checked = input.value === prefs.appearance;
-  for (const key of ['conversationScene', 'readingFont', 'textSize', 'sendKey']) $(key).value = prefs[key];
+  $('voiceInterruptionSetting').hidden = !mac || !navigator.mediaDevices?.getUserMedia;
+  if (next.voiceInterruption !== 'microphone') presence.stopMonitoring();
+  for (const key of ['conversationScene', 'readingFont', 'textSize', 'sendKey', 'voiceInterruption']) $(key).value = prefs[key];
   fillDefaultModels();
   update();
 }

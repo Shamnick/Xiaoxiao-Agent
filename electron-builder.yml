@@ -17,6 +17,8 @@ files:
   - "!src/*-entry.mjs"
 mac:
   icon: build/icon.icns
+  extendInfo:
+    NSMicrophoneUsageDescription: 开启「开口打断」后，朗读期间使用麦克风在本机检测插话。
   category: public.app-category.productivity
   identity: null
   target:

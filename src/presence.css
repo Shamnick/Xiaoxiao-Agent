@@ -103,7 +103,7 @@
 .i-mic { --icon: url('icons/lucide/mic.svg'); }
 .i-volume { --icon: url('icons/lucide/volume-2.svg'); }
 #speakReply[aria-pressed=true] { color: var(--accent); background: var(--accent-soft); }
-#dictationHint { color: var(--muted); font-size: 12px; margin: 5px 8px 2px; }
+#dictationHint, #voiceMonitorActive { color: var(--muted); font-size: 12px; margin: 5px 8px 2px; }
 #returnPresence { width: 38px; }
 #returnPresence img { display: block; }
 body:not(.presence-home) .voice-label { display: none; }

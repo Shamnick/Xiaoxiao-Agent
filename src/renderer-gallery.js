@@ -123,7 +123,7 @@ const openCreationGallery = (() => {
   function setComparison(enabled) {
     toggle.setAttribute('aria-pressed', String(enabled));
     pair.hidden = $('gallerySwap').hidden = !enabled;
-    $('galleryViewport').hidden = $('galleryScale').hidden = $('gallerySave').hidden = enabled;
+    $('galleryUseReference').hidden = $('galleryViewport').hidden = $('galleryScale').hidden = $('gallerySave').hidden = enabled;
     $('creationGalleryTitle').textContent = enabled ? '图片对比' : '图片预览';
     if (!enabled) {
       clearPair();
@@ -163,6 +163,13 @@ const openCreationGallery = (() => {
     $('galleryScale').setAttribute('aria-pressed', String(original));
     $('galleryViewport').scrollTo(0, 0);
   };
+  $('galleryUseReference').onclick = () => {
+    const id = session.id;
+    const index = Number(session.thumbs[session.index].dataset.assetIndex);
+    const round = currentTurns().findIndex(row => row.id === id) + 1;
+    session.selectedReference = { id, index, label: '第 ' + round + ' 轮 · 图 ' + (index + 1) };
+    dialog.close();
+  };
   $('gallerySave').onclick = () => {
     const opened = session;
     const index = opened.index;
@@ -171,7 +178,8 @@ const openCreationGallery = (() => {
     });
   };
   dialog.addEventListener('close', () => {
-    session?.thumbs[session.index]?.focus({ preventScroll: true });
+    if (session?.selectedReference) selectCreationReference(session.selectedReference);
+    else session?.thumbs[session.index]?.focus({ preventScroll: true });
     session = null;
     clearPair();
     $('galleryImage').removeAttribute('src');

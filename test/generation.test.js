@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const { config } = require('../src/providers');
 const { generateAsset } = require('../src/generation');
 
+const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0ioAAAAASUVORK5CYII=';
+const webp = 'UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA';
 const provider = config({ kind: 'openai-compatible', name: 'local', model: 'media-model', baseUrl: 'http://127.0.0.1:3456/v1' });
 
 test('generates an image from a standard JSON response', async () => {
@@ -14,12 +16,12 @@ test('generates an image from a standard JSON response', async () => {
       requestUrl = url;
       assert.equal(options.method, 'POST');
       assert.equal(JSON.parse(options.body).model, 'media-model');
-      return Response.json({ data: [{ b64_json: Buffer.from('png').toString('base64') }] });
+      return Response.json({ data: [{ b64_json: png }] });
     }
   });
   assert.equal(requestUrl, 'http://127.0.0.1:3456/v1/images/generations');
   assert.equal(result.mimeType, 'image/png');
-  assert.equal(Buffer.from(result.data, 'base64').toString(), 'png');
+  assert.equal(result.data, png);
 });
 
 test('passes image count and creative options through and retains all returned images', async () => {
@@ -30,8 +32,8 @@ test('passes image count and creative options through and retains all returned i
     request: async (_url, options) => {
       requested.push(JSON.parse(options.body));
       return Response.json({ data: [
-        { b64_json: Buffer.from('first').toString('base64') },
-        { b64_json: Buffer.from('second').toString('base64') }
+        { b64_json: png },
+        { b64_json: webp }
       ] });
     }
   });
@@ -39,7 +41,8 @@ test('passes image count and creative options through and retains all returned i
   assert.match(requested[0].prompt, /电影感构图/);
   assert.match(requested[0].prompt, /text, watermark/);
   assert.equal(requested[0].style, undefined);
-  assert.deepEqual(result.assets.map(asset => Buffer.from(asset.data, 'base64').toString()), ['first', 'second']);
+  assert.deepEqual(result.assets.map(asset => asset.data), [png, webp]);
+  assert.equal(result.assets[1].filename, 'xiaoxiao-image.webp');
 });
 
 test('passes speech speed to the speech generation request', async () => {
@@ -106,4 +109,26 @@ test('rejects empty binary media returned directly at submission', async () => {
       request: async () => new Response(null, {status:204})
     }), /结果为空/);
   }
+});
+
+test('reference edits guard the selected destination, MIME and reserved fields before submission', async () => {
+  const input = { kind:'image', prompt:'red', reference:{mimeType:'image/png',data:png},
+    destination:{baseUrl:provider.baseUrl,model:provider.model} };
+  let calls = 0;
+  const request = async () => { calls++; return Response.json({}); };
+  for (const [change, message] of [
+    [{destination:{...input.destination, model:'changed'}}, /发送目标/],
+    [{destination:{...input.destination, baseUrl:'https://other.invalid'}}, /发送目标/],
+    [{reference:{...input.reference, mimeType:'image/jpeg'}}, /原图/],
+    [{options:{image:'other'}}, /所选原图/], [{options:{model:'other'}}, /模型与提示词/],
+    [{editEndpoint:'https://other.invalid/'}, /接口路径/]
+  ]) await assert.rejects(generateAsset(provider,{...input,...change},{request}), message);
+  assert.equal(calls,0);
+});
+
+
+test('an HTTP 200 error document cannot be delivered as an image', async () => {
+  const input = {kind:'image',prompt:'test'};
+  await assert.rejects(generateAsset(provider,input,{request:async () => new Response('<html>Error</html>')}), /没有返回.*图片/);
+  await assert.rejects(generateAsset(provider,input,{request:async () => Response.json({data:[{b64_json:'ZXJyb3I='}]})}), /没有返回.*图片/);
 });

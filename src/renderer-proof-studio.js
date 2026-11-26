@@ -56,7 +56,10 @@
       el('proofBefore').textContent = session.current[draft.target];
       el('proofAfter').textContent = draft.text;
       el('proofTarget').textContent = '比较' + names[draft.target];
-      el('proofHelp').textContent = '采纳后保存为新版本。';
+      const impact = { title: '这次只改标题。旁白保留原句，可在采纳后单独同步。',
+        body: '这次只改正文。标题、底图和旁白保持原样。',
+        voice: draft.operation === 'sync' ? '将用当前标题替换这句旁白。音频可在采纳后生成。' : '这次只改旁白稿。海报与已生成的音频保持原样。' };
+      el('proofHelp').textContent = impact[draft.target];
     }
   }
 

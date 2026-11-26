@@ -29,6 +29,8 @@
 2. 把任务卡交给参与者，使用「本地改稿」完成该轮。结束时在试用窗口按 `⌘Q` 退出，在记录表中填写观察结果。
 3. 如同一位参与者需要接续中断的试用，使用终端给出的 `--resume` 命令。下一位参与者从第 1 步开始。
 
+如使用源码版，由主持人在装好依赖的仓库中先运行 `npm run build:renderer`，再运行 `npm run trial:phase-one -- --source`。恢复时使用 `npm run trial:phase-one -- --source --resume round-编号`。观察记录注明测试的是源码版还是安装版。
+
 每轮资料保存在仓库的 `artifacts/phase-one/trials/` 下，默认保留在本机。
 
 | 参与者 | 第一轮 | 第二轮 |

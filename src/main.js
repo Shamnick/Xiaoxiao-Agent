@@ -10,7 +10,7 @@ const { taskPlanTool, taskDraftTool, taskDrafts } = require('./task-plan');
 const { waitForUser, questionTool } = require('./task-interaction');
 const { parallelAnalysisTool } = require('./task-analysis');
 const {config,runAgent,analyzeMedia,visualContent,models}=require('./providers');
-const { generateAsset, pollVideo } = require('./generation');
+const { generateAsset, pollVideo, cancelRemoteVideo, videoCancelUrl } = require('./generation');
 const { synthesizeLocalSpeech } = require('./local-speech');
 const { createArtifactTool } = require('./artifacts');
 const { checkConnection, saveReport } = require('./connection-report');
@@ -184,7 +184,7 @@ function rememberVideo(id, record) {
   store.write('video-receipts', rows);
 }
 handle('generation:receipts', () => Object.fromEntries(Object.entries(videoReceipts())
-  .map(([id, row]) => [id, row.remoteId ? 'accepted' : 'unknown'])));
+  .map(([id, row]) => [id, row.canceled ? 'canceled' : row.remoteId ? 'accepted' : 'unknown'])));
 handle('generation:forget', (_, ids) => {
   if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(id))) throw Error('任务记录无效');
   if (!ids.length) return;
@@ -214,13 +214,20 @@ handle('generation:run', async (sender, input) => {
     // Receipts contain only a connection fingerprint, routing paths and the remote ID.
     const connection = createHash('sha256').update(JSON.stringify([p.baseUrl,input.providerId,p.model])).digest('hex');
     const prior = videoReceipts()[request.id];
-    if (input.resume === true) {
+    if (input.resume === true || input.cancelRemote === true) {
       if (!prior?.remoteId) throw Error('尚未取得可查询的任务号');
       if (connection !== prior.connection) throw Error('原连接已更改，请先恢复原模型和地址');
+      if (prior.canceled) throw Error('服务已确认取消视频任务');
+      if (input.cancelRemote === true) {
+        const confirmed = await cancelRemoteVideo(p, prior.routes.cancelEndpoint, prior.remoteId, options);
+        if (confirmed) rememberVideo(request.id, { ...prior, canceled: true });
+        return { canceled: confirmed };
+      }
       return await pollVideo(p, prior.routes, prior.remoteId, options);
     }
     if (prior) throw Error('已有提交记录，请查询原任务');
-    const routes = { endpoint: input.endpoint, pollEndpoint: input.pollEndpoint, contentEndpoint: input.contentEndpoint };
+    const routes = { endpoint: input.endpoint, pollEndpoint: input.pollEndpoint, contentEndpoint: input.contentEndpoint, cancelEndpoint: input.cancelEndpoint };
+    if (routes.cancelEndpoint) videoCancelUrl(p.baseUrl, routes.cancelEndpoint, 'validate');
     if (Object.values(routes).some(route => route && (typeof route !== 'string' || /[?#]/.test(route) || mask(route) !== route))) throw Error('请移除接口路径中的查询参数和密钥');
     const record = { connection, routes };
     return await generateAsset(p, input, {
@@ -228,6 +235,12 @@ handle('generation:run', async (sender, input) => {
       onSubmit: () => rememberVideo(request.id, record),
       onVideoId: remoteId => rememberVideo(request.id, { ...record, remoteId })
     });
+  } catch (error) {
+    if (input.kind === 'video' && error.code === 'VIDEO_CANCELED') {
+      const receipt = videoReceipts()[request.id];
+      if (receipt?.remoteId) rememberVideo(request.id, { ...receipt, canceled: true });
+    }
+    throw error;
   } finally {
     if (generationRequests.get(sender.id) === request) generationRequests.delete(sender.id);
   }
@@ -240,7 +253,7 @@ handle('generation:save', async (sender, input) => {
   if (!input || typeof input.data !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(input.data)) throw Error('生成结果无效');
   const bytes = Buffer.from(input.data, 'base64');
   if (!bytes.length || bytes.length > 64 * 1024 * 1024) throw Error('生成结果超过 64 MiB 限制');
-  const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'video/mp4': 'mp4', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/opus': 'opus' };
+  const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/opus': 'opus' };
   const extension = extensions[input.mimeType];
   if (!extension) throw Error('不支持保存此结果格式');
   const fallback = `xiaoxiao-${input.kind || 'result'}.${extension}`;
@@ -834,11 +847,11 @@ function validateServers(rows){
   });
 }
 const preferenceOptions = {
-  appearance: ['system', 'light', 'dark'], conversationScene: ['silk', 'workspace'], readingFont: ['serif', 'system'],
+  voiceInterruption: ['manual', 'microphone'], appearance: ['system', 'light', 'dark'], conversationScene: ['silk', 'workspace'], readingFont: ['serif', 'system'],
   textSize: ['standard', 'large', 'small'], sendKey: ['enter', 'modifier']
 };
 function preferences() {
-  return { appearance: 'dark', conversationScene: 'silk', readingFont: 'serif', textSize: 'standard', sendKey: 'enter', defaultModel: '',
+  return { voiceInterruption: 'manual', appearance: 'dark', conversationScene: 'silk', readingFont: 'serif', textSize: 'standard', sendKey: 'enter', defaultModel: '',
     ...store.read('preferences', {}) };
 }
 handle('preferences:get', () => preferences());

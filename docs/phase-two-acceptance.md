@@ -37,3 +37,6 @@
 在仓库根目录运行 `node scripts/phase-two-model-qa.cjs`。脚本使用本机安装版和临时数据目录，为四种场景各建一个空会话。默认服务监听本机回环地址。本次四个场景全部通过，共发出 10 个本地请求。脚本逐个记录请求数、首个 HTTP 响应头与首段正文的耗时、保存框次数和实际打开的文件，可在 `artifacts/phase-two/fixture/` 查看样本报告。
 
 指定模型真测使用同一脚本的 `--live` 开关，读取 Xiaoxiao 里已加密保存的「测试」连接。使用环境变量 `XIAOXIAO_QA_APPROVED_ORIGIN` 或本地文件 `artifacts/phase-two/approved-origin.txt` 指定本次获准使用的 HTTPS 网关源地址。按已核实的费率折算单次人民币费用上界后，以分为单位配置 `XIAOXIAO_QA_MAX_FEN_PER_REQUEST`。每次发送前预留该笔费用，累计以 2000 分为限，中断和重跑均计入。单次请求正文最多 8192 字节，输出参数 `max_completion_tokens` 为 768。使用服务端硬额度时，则按照额度接口的实际单位填写 `XIAOXIAO_QA_BILLING_UNIT` 和每单位对应的人民币上界 `XIAOXIAO_QA_CNY_PER_UNIT_CEILING`。真实样本与额度记录保存在 `artifacts/phase-two/live/`。[验收脚本](../scripts/phase-two-model-qa.cjs)
+
+
+0.6.14 可附加 `--source` 使用源码运行时。2026 年 11 月 26 日，`node scripts/phase-two-model-qa.cjs --source` 通过全部四种场景，实际打开的 PDF 正文与最新要求一致，合计 10 次回环请求。运行记录标明 source 或 packaged。指定网关的公开文档提供媒体计费口径，本轮未取得该账户文本模型的人民币费用上界。隔离源码进程另行尝试读取已配置连接时，钥匙串解密失败。这两个条件分别记录，真实推理次数仍为 0。
