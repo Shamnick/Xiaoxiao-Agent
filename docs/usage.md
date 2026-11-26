@@ -241,6 +241,8 @@ electron-builder.yml 控制安装包名称、App ID、平台和签名设置。�
 
 ## 验证
 
+在装有本项目依赖的 Mac 上，运行 `npm run test:installed:mac` 可验收「应用程序」中的 Xiaoxiao Agent。请使用与安装版同版本的源码。测试会创建临时用户目录，核对运行中的版本、可执行文件和数据路径，操作首页、打开改稿窗口并生成语音，最后将导出的 WAV 片段与播放器中的音频逐字节比较。命令返回成功才算通过本项验收。
+
 ~~~bash
 npm run check
 npm test

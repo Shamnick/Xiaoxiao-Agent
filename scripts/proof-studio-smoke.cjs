@@ -45,9 +45,20 @@ const { _electron: electron } = require('playwright');
     await once(server,'listening');
     new Store(data).write('providers',[{id:'fixture',kind:'openai-compatible',name:'隔离服务',model:'rewrite',
       baseUrl:'http://127.0.0.1:'+server.address().port+'/v1',stream:false}]);
-    const launch = () => electron.launch({ executablePath, args: executablePath ? [] : ['.'], cwd: root,
+    const launch = () => electron.launch({ executablePath, args: executablePath ? [] : ['.'], cwd: root, timeout:20000,
       env: { ...process.env, XIAOXIAO_SMOKE_DIR: data, XIAOXIAO_SMOKE_SHOW: '1' } });
     app = await launch();
+    if (executablePath) {
+      const runtime = await app.evaluate(({app}) => ({
+        packaged:app.isPackaged, executable:process.execPath, version:app.getVersion(),
+        profile:app.getPath('userData'), session:app.getPath('sessionData')
+      }));
+      assert.equal(runtime.packaged, true);
+      assert.equal(await fs.realpath(runtime.executable), await fs.realpath(executablePath));
+      assert.equal(runtime.version, require('../package.json').version);
+      assert.equal(await fs.realpath(runtime.profile), await fs.realpath(data));
+      assert.equal(await fs.realpath(runtime.session), await fs.realpath(path.join(data,'Session')));
+    }
     let page = await app.firstWindow();
     page.setDefaultTimeout(9000);
     const errors = [], network = [];
