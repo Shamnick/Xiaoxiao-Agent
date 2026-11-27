@@ -317,6 +317,7 @@ textarea::placeholder, input::placeholder { color: var(--muted); }
 .task-updates { display: grid; gap: 7px; margin: 12px 0 0; padding: 0; list-style: none; }
 .task-updates li { display: grid; gap: 3px; padding: 7px 11px; border-radius: 8px; background: var(--subtle); overflow-wrap: anywhere; font-size: 13px; }
 .task-updates small { color: var(--muted); font-size: 12px; }
+.task-updates li[data-delivery="accepted"] small { color: var(--accent); }
 .task-updates span { white-space: pre-wrap; }
 .task-outputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-block: 5px 16px; }
 .workspace-notice { display: flex; align-items: flex-start; gap: 9px; margin-block: 5px 12px; padding: 10px 12px; border-radius: 8px; background: var(--pending-soft); color: var(--pending); font-size: 13px; overflow-wrap: anywhere; }

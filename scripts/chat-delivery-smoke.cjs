@@ -14,6 +14,7 @@ const { Store } = require('../src/store');
   const addition = '请使用蓝色';
   const artifactPath = path.join(dir, '骑行.html');
   const releaseFirst = Promise.withResolvers();
+  const releaseHeaders = Promise.withResolvers();
   const releaseFile = Promise.withResolvers();
   const requests = [];
   const initialPdf = '秋季工作坊在一楼展厅举行。活动安排在周四，预算 500 元，做成一页 PDF。';
@@ -38,6 +39,7 @@ const { Store } = require('../src/store');
       requests.push(message);
       assert(body.stream);
       assert.deepEqual(body.tools.map(x => x.function.name), ['save_artifact']);
+      if (message.content === addition) await releaseHeaders.promise;
       res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8' });
       const event = (delta, finish_reason) => res.write('data: ' + JSON.stringify({ choices: [{delta, finish_reason}] })+'\n\n');
       if (message.content === first) {
@@ -127,7 +129,7 @@ const { Store } = require('../src/store');
     assert(await page.locator('#stop').isEnabled(), 'First text is visible before the server completes the turn');
     await page.locator('#prompt').fill(addition);
     await page.locator('#prompt').press('Enter');
-    await page.getByText('补充要求 · 等待送达', {exact:true}).waitFor();
+    await page.getByText('补充要求 · 已排队，等待下一次请求', {exact:true}).waitFor();
     assert.equal(requests.length,1);
     const choose = target => app.evaluate(({dialog,shell},file) => {
       dialog.showSaveDialog = async () => ({canceled:false,filePath:file});
@@ -135,8 +137,10 @@ const { Store } = require('../src/store');
     },target);
     await choose(artifactPath);
     releaseFirst.resolve();
+    await page.getByText('补充要求 · 正在等待服务响应', {exact:true}).waitFor();
+    releaseHeaders.resolve();
     await page.locator('#runStatus').filter({hasText:'正在生成文件内容'}).waitFor();
-    await page.getByText('补充要求 · 已发送', {exact:true}).waitFor();
+    await page.getByText('补充要求 · 模型服务已响应', {exact:true}).waitFor();
     releaseFile.resolve();
     const open = page.getByRole('button',{name:'打开 · 骑行.html',exact:true});
     await open.click();
@@ -187,6 +191,7 @@ const { Store } = require('../src/store');
       for (const term of ['秋季工作坊','一楼展厅','周五']) assert(contents.includes(term), term);
       assert.doesNotMatch(contents, /周四|预算|500/);
     }
+    await page.getByText('立即改向 · 模型服务已响应', {exact:true}).waitFor();
     assert.equal(requests.length,10);
     await fs.mkdir(pdfOutput);
     const send = async prompt => {
@@ -270,7 +275,7 @@ const { Store } = require('../src/store');
     }
     console.log('PASS: Chat first SSE text before completion, mid-stream instructions, tool input progress, standalone HTML file delivery, open action legacy reply export, and retaining a saved file across two truncated replies and manual resumes. PDF generation, redirect, cancel and restart recovery verified against the real files and save counts.');
   } finally {
-    releaseFirst.resolve(); releaseFile.resolve();
+    releaseFirst.resolve(); releaseHeaders.resolve(); releaseFile.resolve();
     await app?.close(); server.closeAllConnections(); server.close();
     await fs.rm(dir,{recursive:true,force:true});
   }

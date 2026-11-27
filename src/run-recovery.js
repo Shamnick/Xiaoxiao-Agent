@@ -7,7 +7,7 @@ function beginCheckpoint(userIndex, continuation) {
     userIndex, originalUserIndex: prior?.originalUserIndex ?? userIndex,
     partial: prior?.partial || '', tools: (prior?.tools || []).slice(-MAX_TOOLS),
     clarifications: (prior?.clarifications || []).slice(-8),
-    updates: (prior?.updates || []).slice(-24).map(update => ({ ...update, sent: true })),
+    updates: (prior?.updates || []).slice(-24).map(update => ({ ...update })),
     ...(prior?.artifacts?.length && { artifacts: [...prior.artifacts] })
   };
 }

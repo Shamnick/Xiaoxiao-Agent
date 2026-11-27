@@ -1102,13 +1102,14 @@ function renderUpdates(article, updates = [], running = true) {
   if (!updates.length) return;
   const list = document.createElement('ul');
   list.className = 'task-updates';
-  if (running) list.setAttribute('aria-live', 'polite');
-  for (const { text, sent } of updates) {
+  list.setAttribute('aria-label', '运行中提交的要求');
+  for (const update of updates) {
     const item = document.createElement('li');
     const label = document.createElement('small');
-    label.textContent = sent ? '补充要求 · 已发送' : running ? '补充要求 · 等待送达' : '补充要求 · 未送达';
+    label.textContent = SteeringUpdates.title(update, running);
+    item.dataset.delivery = update.delivery || 'queued';
     const content = document.createElement('span');
-    content.textContent = text;
+    content.textContent = update.text;
     item.append(label, content);
     list.append(item);
   }
@@ -1134,6 +1135,7 @@ function renderCurrent({ preserveScroll = true } = {}) {
   streamTimer = null;
   const scrollTop = $('scrollArea').scrollTop;
   const follow = !preserveScroll || nearBottom();
+  $('steeringNotice').textContent = '';
   const scope = renderConversationHeader();
   renderTaskPlan(current?.taskPlan);
   renderDrafts(draftsFor(current));
@@ -1783,8 +1785,16 @@ function handleRunEvent(event) {
       update();
     }
   } else if (type === 'updates') {
+    const previous = run.updates || [];
     run.updates = event.updates;
-    if (visible && streamContent) renderUpdates(streamContent.parentElement, event.updates);
+    if (visible && streamContent) {
+      renderUpdates(streamContent.parentElement, event.updates);
+      const changes = event.updates.flatMap((entry, index) => {
+        const title = SteeringUpdates.title(entry, true);
+        return previous[index] && title === SteeringUpdates.title(previous[index], true) ? [] : [`第 ${index + 1} 条${title}`];
+      });
+      if (changes.length) $('steeringNotice').textContent = changes.join('。');
+    }
   } else if (type === 'stopping' || type === 'interaction') {
     const focusWasInside = visible && (workspaceReview.pendingOpen() || $('interactionPanel').contains(document.activeElement));
     if (type === 'stopping') run.stopping = true;

@@ -18,11 +18,14 @@ function main() {
     // Own the temporary profile even if the desktop test runner exits during launch.
     const env = {...process.env, TMPDIR:tmp, XIAOXIAO_SMOKE_EXECUTABLE:executable};
     delete env.XIAOXIAO_SMOKE_QA_DIR;
-    execFileSync(process.execPath, [path.join(__dirname, 'proof-studio-smoke.cjs')], {env, stdio:'inherit'});
+    execFileSync('/usr/bin/swift', [path.join(__dirname, 'check-mac-window.swift'), bundle], {env, stdio:'inherit'});
+    for (const suite of ['proof-studio-smoke.cjs', 'chat-delivery-smoke.cjs']) {
+      execFileSync(process.execPath, [path.join(__dirname, suite)], {env, stdio:'inherit'});
+    }
   } finally {
     fs.rmSync(tmp, {recursive:true, force:true});
   }
-  console.log('安装版通过首页交互和本机 WAV 片段导出验收。');
+  console.log('安装版通过系统启动、改稿、音频导出与对话文件交付验收。');
 }
 
 try { main(); } catch (error) {

@@ -249,6 +249,7 @@
             <button data-prompt="请阅读我附加的文本，提炼核心观点、关键细节和待确认的问题。"><span class="ui-icon i-file" aria-hidden="true"></span> 阅读资料</button>
             <button data-task-only data-prompt="请先查看工作目录，介绍项目结构，并告诉我你能协助完成哪些任务。"><span class="ui-icon i-folder" aria-hidden="true"></span> 探索项目</button>
           </div>
+          <div id="steeringNotice" class="sr-only" role="status" aria-atomic="true"></div>
           <p id="composerHint" class="sr-only">Enter 发送 · Shift + Enter 换行</p>
         </div>
       </div>
@@ -871,6 +872,7 @@
   <script src="renderer-metrics.js"></script>
   <script src="connection-intent.js"></script>
   <script src="renderer-connection.js"></script>
+  <script src="steering-updates.js"></script>
   <script src="chat-drafts.js"></script>
   <script src="renderer.js"></script>
   <script src="renderer-media.js"></script>

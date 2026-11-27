@@ -3,6 +3,7 @@ const path=require('node:path'),fs=require('node:fs'),{randomUUID,createHash}=re
 const { workspaceGuidance, withGuidance } = require('./workspace-guidance');
 const { MAX_PARTIAL, beginCheckpoint, recordTool, failRun, resumeContext } = require('./run-recovery');
 const {Store}=require('./store');
+const SteeringUpdates = require('./steering-updates');
 const proof = require('./proof-versions');
 const proofRequests = new Map();
 const { emptyMetrics, applyMetric } = require('./conversation-metrics');
@@ -594,7 +595,7 @@ handle('conversations:export',async(sender,id)=>{
     const clarifications = (message.clarifications || message.recovery?.clarifications || [])
       .map(({ question, answer }) => `问题：${question}\n\n回答：${answer}`);
     const updates = (message.updates || message.recovery?.updates || [])
-      .map(({ text, sent }) => `${sent ? '补充要求' : '未送达的要求'}：${text}`);
+      .map(update => `${SteeringUpdates.title(update, false)}：${update.text}`);
     return [`## ${message.role === 'user' ? '用户' : '助手'}`, message.content, ...clarifications, ...updates].join('\n\n');
   });
   await fs.promises.writeFile(r.filePath, ['# ' + c.title, ...turns].join('\n\n'), { mode: 0o600 });
@@ -893,7 +894,7 @@ handle('chat:update', (_, { conversationId, requestId, text, immediate }) => {
   }
   if (typeof text !== 'string' || !text.trim() || text.length > 4000) throw Error('补充要求需要 1 至 4000 个字符');
   if (mask(text) !== text) throw Error('请在输入框的「＋ → 接口检测」中使用临时密钥');
-  run.addUpdate(text.trim());
+  run.addUpdate(text.trim(), immediate === true);
   if (immediate === true) run.interruptInference?.();
 });
 
@@ -989,15 +990,10 @@ async function runConversation(sender, { conversationId, text, attachmentId, att
   c.pendingRun = beginCheckpoint(c.messages.length, continuation);
   run.metrics = c.pendingRun.metrics = emptyMetrics();
   const priorPartial = c.pendingRun.partial;
-  run.addUpdate = text => {
-    if (run.updates.length >= 8) throw Error('此轮补充要求已达到 8 条');
-    const update = { id: randomUUID(), text, sent: false };
-    run.updates.push(update);
-    c.pendingRun.updates.push(update);
-    try { persist(c); }
-    catch (error) { run.updates.pop(); c.pendingRun.updates.pop(); throw error; }
-    emit({ type: 'updates', updates: run.updates });
-  };
+  run.updates = c.pendingRun.updates;
+  const steering = SteeringUpdates.track(run.updates, () => persist(c),
+    () => emit({ type: 'updates', updates: run.updates }));
+  run.addUpdate = (text, immediate) => steering.enqueue({ id: randomUUID(), text, immediate, sent: false });
   c.messages.push(record);
   if (c.title === '新对话') c.title = text.slice(0, 36);
   const started = persist(c);
@@ -1136,15 +1132,8 @@ async function runConversation(sender, { conversationId, text, attachmentId, att
       c.agent && drafts.length ? 'Existing deliverables: ' + JSON.stringify(drafts.map(({ id, title }) => ({ id, title }))) : null,
       workflow, lastPlan, c.systemPrompt
     ].filter(Boolean).join('\n');
-    const takeUserUpdate = () => {
-      const pending = run.updates.filter(update => !update.sent);
-      if (!pending.length) return '';
-      for (const update of pending) update.sent = true;
-      persist(c);
-      emit({ type: 'updates', updates: run.updates });
-      return pending.map(update => update.text).join('\n\n');
-    };
-    const answer = await runAgent(p, history, { tools, system, signal, maxSteps: options.maxSteps, takeUserUpdate, onEvent, onMetric,
+    const answer = await runAgent(p, history, { tools, system, signal, maxSteps: options.maxSteps,
+      takeUserUpdate: steering.take, request: steering.request, onEvent, onMetric,
       setInterrupt: interrupt => { run.interruptInference = interrupt; } });
     signal.throwIfAborted();
     const { pendingRun, ...completed } = c;

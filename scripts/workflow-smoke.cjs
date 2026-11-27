@@ -242,7 +242,7 @@ async function main() {
     assert.match(fixture.seen.system, /WORKFLOW_RULE_73/);
     await prompt(followUp);
     await click('steer');
-    await waitText('#chat', '等待送达');
+    await waitText('#chat', '已排队，等待下一次请求');
     await click('workspaceBrowserButton');
     await openFile('素材');
     await waitText('#fileLocationPath', '素材');
