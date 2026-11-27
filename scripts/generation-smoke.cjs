@@ -162,7 +162,7 @@ async function run() {
       await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(1320, 860));
     }
 
-    await page.locator('#generationEvidence').filter({hasText:'未验证'}).waitFor();
+    await page.locator('#generationEvidence').filter({hasText:'请选择'}).waitFor();
     const chatModel = await page.locator('#modelSelect').inputValue();
     await page.locator('#chooseImageModel').click();
     await page.locator('#imageCatalogList option').first().waitFor({state:'attached'});
@@ -278,6 +278,7 @@ async function run() {
     assert.equal((await fs.readdir(path.join(exportDirectory, batchFolders[0]))).length, 2);
 
     await page.locator('#generationTabVideo').click();
+    await page.locator('#generationVideoModel').selectOption('fixture-vision');
     await page.locator('#generationVideoPrompt').fill('海浪慢慢涌向岸边');
     await page.locator('#runGeneration').click();
     try { await page.locator('video.generation-result').waitFor(); }
@@ -293,6 +294,7 @@ async function run() {
     assert.match(videoPrompts[1], /海浪慢慢涌向岸边[\s\S]+镜头拉远/);
     assert.doesNotMatch(videoPrompts[1], /玻璃/);
     await page.locator('#generationTabAudio').click();
+    await page.locator('#generationAudioModel').selectOption('fixture-vision');
     await page.locator('#generationAudioPrompt').fill('欢迎来到创作中心');
     await page.locator('#runGeneration').click();
     await page.locator('audio.generation-result-audio').waitFor();
@@ -331,6 +333,7 @@ async function run() {
     assert.equal(await imageField.inputValue(), imagePrompts[0]);
     await page.locator('#cancelCreationEdit').click();
     assert.equal(await imageField.inputValue(), '未发出的草稿');
+    await page.locator('#generationImageCount').selectOption('1');
     await first.getByRole('button', {name:'重新生成这一轮'}).click();
     await page.locator('.creation-turn').nth(2).locator('img').waitFor();
     assert.equal(imagePrompts[2], imagePrompts[0]);

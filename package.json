@@ -1,6 +1,6 @@
 {
   "name": "xiaoxiao-agent",
-  "version": "0.6.19",
+  "version": "0.6.20",
   "description": "Xiaoxiao Agent — multi-model desktop workspace with generation, visual testing, and Agent workflows",
   "main": "src/main.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "dist:mac": "electron-builder --mac dmg",
     "check": "node scripts/check.cjs",
     "trial:phase-one": "node scripts/field-trial.cjs",
-    "test:desktop": "node scripts/connection-smoke.cjs && node scripts/metrics-smoke.cjs && node scripts/navigator-smoke.cjs && node scripts/chat-drafts-smoke.cjs && node scripts/chat-delivery-smoke.cjs && node scripts/presence-smoke.cjs && node scripts/voice-interruption-smoke.cjs && node scripts/smoke.cjs && node scripts/workflow-smoke.cjs && node scripts/workbench-smoke.cjs && node scripts/generation-smoke.cjs && node scripts/proof-studio-smoke.cjs && node scripts/video-recovery-smoke.cjs && node scripts/theme-smoke.cjs && node scripts/field-trial-smoke.cjs",
+    "test:desktop": "node scripts/connection-smoke.cjs && node scripts/metrics-smoke.cjs && node scripts/navigator-smoke.cjs && node scripts/chat-drafts-smoke.cjs && node scripts/chat-delivery-smoke.cjs && node scripts/presence-smoke.cjs && node scripts/voice-interruption-smoke.cjs && node scripts/smoke.cjs && node scripts/workflow-smoke.cjs && node scripts/workbench-smoke.cjs && node scripts/studio-routing-smoke.cjs && node scripts/generation-smoke.cjs && node scripts/proof-studio-smoke.cjs && node scripts/video-recovery-smoke.cjs && node scripts/theme-smoke.cjs && node scripts/field-trial-smoke.cjs",
     "screenshots": "node scripts/screenshots.cjs",
     "prestart": "npm run build:renderer",
     "prepack": "npm run build:renderer",

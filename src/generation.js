@@ -217,10 +217,10 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
     if (input.negativePrompt) requestPrompt += `\n\n请避免：${String(input.negativePrompt).slice(0, 2000)}。`;
   }
   const body = kind === 'image'
-    ? { model: String(input.model || provider.model), prompt: requestPrompt, size: String(input.size || '1024x1024'), n: Math.min(4, Math.max(1, Number(input.count) || 1)) }
+    ? { model: provider.model, prompt: requestPrompt, size: String(input.size || '1024x1024'), n: Math.min(4, Math.max(1, Number(input.count) || 1)) }
     : kind === 'video'
-      ? { model: String(input.model || provider.model), prompt: requestPrompt, seconds: String(Number(input.duration) || 5), size: ({ '16:9': '1280x720', '9:16': '720x1280', '1:1': '1024x1024' })[input.aspectRatio] || '1280x720' }
-      : { model: String(input.model || provider.model), input: prompt, voice: String(input.voice || 'alloy'), response_format: String(input.format || 'mp3'), speed: Number(input.speed) || 1 };
+      ? { model: provider.model, prompt: requestPrompt, seconds: String(Number(input.duration) || 5), size: ({ '16:9': '1280x720', '9:16': '720x1280', '1:1': '1024x1024' })[input.aspectRatio] || '1280x720' }
+      : { model: provider.model, input: prompt, voice: String(input.voice || 'alloy'), response_format: String(input.format || 'mp3'), speed: Number(input.speed) || 1 };
   if (kind === 'image') {
     if (input.quality) body.quality = String(input.quality);
     if (['natural', 'vivid'].includes(input.style)) body.style = String(input.style);
@@ -228,9 +228,8 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   if (input.options !== undefined) {
     if (!input.options || typeof input.options !== 'object' || Array.isArray(input.options)
       || JSON.stringify(input.options).length > 16000) throw Error('高级参数需要是有效 JSON 对象，且不超过 16 KiB');
-    if (editingImage && ['model', 'prompt'].some(key => Object.hasOwn(input.options, key))) {
-      throw Error('参考图的模型与提示词请在工作室中选择');
-    }
+    if (Object.hasOwn(input.options, 'model')) throw Error('请在模型选择器中选择模型，并从高级参数中移除 model。');
+    if (editingImage && Object.hasOwn(input.options, 'prompt')) throw Error('请在工作室中填写参考图的提示词');
     Object.assign(body, input.options);
   }
   onStatus({ phase: 'submit', text: kind === 'video' ? '正在提交视频生成任务…' : '正在提交生成任务…' });

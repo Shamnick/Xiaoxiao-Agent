@@ -87,7 +87,7 @@ function updateMediaEvidence() {
   const fields = captureFields();
   const local = isLocalVoice(kind, generationModelId());
   const route = mediaRoute(kind, fields, creationDrafts.get(activeThread())?.reference);
-  $('generationEvidence').textContent = local ? 'Mac 系统语音 · 本机处理' :
+  $('generationEvidence').textContent = !generationModelId() ? '请选择已保存的模型，或从服务商目录添加。' : local ? 'Mac 系统语音 · 本机处理' :
     previewedRoutes.has(route) ? '此模型与接口在本机有可预览的作品' : '此模型与接口的预览能力未验证';
 }
 async function recordMediaPreview(id) {
@@ -151,11 +151,45 @@ function panelFields(kind = generationKind) {
   return [...$(generationTabs[kind][1]).querySelectorAll('input, select, textarea')];
 }
 
+function routeField(field) { return field.id.endsWith('Endpoint'); }
+
+function routePreferenceKey(kind) {
+  const row = providers.find(p => p.id === generationModelId(kind));
+  return row && 'xiaoxiao-studio-routes:' + JSON.stringify([kind, row.id, row.baseUrl, row.model]);
+}
+
+function applyStudioRoutes(kind) {
+  const key = routePreferenceKey(kind);
+  if (!key) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(key));
+    for (const field of panelFields(kind).filter(routeField)) {
+      if (typeof saved?.[field.id] === 'string') field.value = saved[field.id];
+    }
+  } catch { /* A damaged preference should not block the studio. */ }
+}
+
+function rememberStudioRoutes(kind) {
+  const key = routePreferenceKey(kind);
+  if (key) {
+    const values = panelFields(kind).filter(routeField).map(field => [field.id, field.value]);
+    localStorage.setItem(key, JSON.stringify(Object.fromEntries(values)));
+  }
+}
+
 function restoreFields(row) {
+  const modelField = 'generation' + generationCapitalized(row.kind) + 'Model';
+  const sameModel = generationModelId(row.kind) === row.fields?.[modelField];
   for (const field of panelFields(row.kind)) {
+    if (field.id.endsWith('Model')) continue; // The studio owns its model across threads.
+    if (!sameModel && (routeField(field) || field.id.endsWith('Options'))) {
+      field.value = field.defaultValue;
+      continue;
+    }
     const value = row.fields?.[field.id];
     if (value !== undefined) field.value = value;
   }
+  applyStudioRoutes(row.kind);
 }
 
 function saveCreationDraft() {
@@ -268,7 +302,9 @@ function setGenerationTab(kind, threadId = activeThreads[kind]) {
   const turns = currentTurns();
   const draft = creationDrafts.get(threadId);
   const fields = draft?.fields || turns.at(-1)?.fields;
+  resetParameterFields(kind);
   if (fields) restoreFields({ kind, fields });
+  else applyStudioRoutes(kind);
   for (const [name, [tab, panel]] of Object.entries(generationTabs)) {
     $(tab).setAttribute('aria-selected', String(name === kind));
     $(tab).tabIndex = name === kind ? 0 : -1;
@@ -316,17 +352,27 @@ function renderGenerationPresets() {
   }
 }
 
+// Names are a discovery aid, never evidence that a route works.
+const studioModelNames = {
+  image: /gpt-image|dall-e|seedream|imagen|flux|image-preview/i,
+  video: /sora|veo|kling|seedance|wan[-_.]?(?:2|video)|hailuo/i,
+  audio: /(?:^|[-_/.])tts(?:[-_/.]|$)|kokoro|cosyvoice|speech[-_.]?0[12]/i
+};
 function fillGenerationModels(rows) {
   for (const kind of Object.keys(generationTabs)) {
-    const select = $(`generation${generationCapitalized(kind)}Model`);
-    const draftModel = creationDrafts.get(activeThreads[kind])?.fields?.[select.id];
-    const pinned = rows.find(row => row.id === localStorage.getItem('xiaoxiao-studio-model-' + kind));
-    const imageChoice = kind === 'image' && rows.find(row => /gpt-image|dall-e|seedream|imagen|flux/i.test(row.model));
-    const preferred = select.value || draftModel || pinned?.id || imageChoice?.id || current?.providerId || $('modelSelect').value;
-    select.replaceChildren(...rows.map(row => new Option(`${row.name} · ${row.model}`, row.id)));
-    if (isLocalVoice(kind,localVoiceId)) select.append(new Option('Mac 系统语音 · 本机',localVoiceId));
-    if (!select.options.length) select.append(new Option('还没有模型配置', ''));
-    if ([...select.options].some(option => option.value === preferred)) select.value = preferred;
+    const select = $('generation' + generationCapitalized(kind) + 'Model');
+    const previousModel = select.value;
+    const pin = localStorage.getItem('xiaoxiao-studio-model-' + kind);
+    const local = isLocalVoice(kind, localVoiceId);
+    const suggested = rows.find(row => studioModelNames[kind].test(row.model));
+    const preferred = pin || suggested?.id || (local ? localVoiceId : '');
+    const available = rows.some(row => row.id === preferred) || (local && preferred === localVoiceId);
+    const placeholder = new Option(pin && !available ? '原模型已移除，请重新选择' : '请选择' + generationLabels[kind] + '模型', '');
+    placeholder.disabled = true;
+    select.replaceChildren(placeholder, ...rows.map(row => new Option(row.name + ' · ' + row.model, row.id)));
+    if (local) select.append(new Option('Mac 系统语音 · 本机', localVoiceId));
+    select.value = available ? preferred : '';
+    if (select.value !== previousModel) resetRouteFields(kind);
   }
 }
 
@@ -442,7 +488,7 @@ function renderGenerationResult() {
           buttons.append(cancel);
         }
       }
-      buttons.append(messageButton('refresh', '重新生成这一轮', () => repeatCreation(item)),
+      buttons.append(messageButton('refresh', '用当前模型与参数重新生成这一轮', () => repeatCreation(item)),
         messageButton('edit', '编辑这轮提示词', () => editCreation(item)));
     }
   }
@@ -627,7 +673,7 @@ function updateGenerationComposer() {
     prompt.placeholder = '描述需要修改和保留的部分…';
     $('generationPromptLabel').textContent = '参考图编辑';
   }
-  $('runGeneration').title = hasModel ? '开始生成 · ⌘ / Ctrl + Enter' : '请先在设置中添加模型配置';
+  $('runGeneration').title = hasModel ? '开始生成 · ⌘ / Ctrl + Enter' : '请在生成设置中选择' + generationLabels[generationKind] + '模型';
   if (prompt) $('generationPromptCount').textContent = local && prompt.value.length > 3000
     ? `${prompt.value.length} 字符 · 请选择 3,000 字符以内的片段`
     : `${prompt.value.length} / ${local ? '3,000' : '8,000'}`;
@@ -673,7 +719,6 @@ async function refreshGenerationModels() {
     providers = await api.providers.list();
     fillGenerationModels(providers);
     updateGenerationComposer();
-    if (!generationModelId()) $('generationStatus').textContent = '请先在设置中添加模型配置。';
   } catch (error) {
     $('generationStatus').textContent = error.message;
   }
@@ -729,13 +774,26 @@ function parseGenerationOptions(text) {
   }
 }
 
-function resetGenerationSettings() {
-  for (const field of panelFields()) {
+function resetRouteFields(kind) {
+  for (const field of panelFields(kind)) {
+    if (routeField(field) || field.id.endsWith('Options')) field.value = field.defaultValue;
+  }
+  applyStudioRoutes(kind);
+}
+
+function resetParameterFields(kind) {
+  for (const field of panelFields(kind)) {
     if (field.id.endsWith('Model')) continue;
     if (field.tagName === 'SELECT') field.value = ([...field.options].find(option => option.defaultSelected) || field.options[0]).value;
     else field.value = field.defaultValue;
   }
+}
+
+function resetGenerationSettings() {
+  resetParameterFields(generationKind);
+  rememberStudioRoutes(generationKind);
   saveCreationDraft();
+  updateGenerationComposer();
   $('generationStatus').textContent = '已恢复默认生成设置。';
 }
 
@@ -968,7 +1026,7 @@ function resumeVideo(item, cancelRemote = false) {
 }
 function repeatCreation(item) {
   if (item.receipt && !window.confirm('重新生成将提交一个新视频任务，服务商可能再次收费。继续吗？')) return;
-  enqueueCreation(item.prompt, item.fields || captureFields(), item.parentId || null, item.excerptLabel, item.reference, item.destination);
+  enqueueCreation(item.prompt, captureFields(), item.parentId || null, item.excerptLabel, item.reference, item.destination);
 }
 
 $('generationComposer').onsubmit = event => {
@@ -1114,7 +1172,12 @@ document.addEventListener('input', event => {
     updateDraftEntry();
     updateGenerationComposer();
   } else if ($('creationInspector').contains(event.target)) {
-    if (event.target.id === 'generationImageModel' && event.target.value) localStorage.setItem('xiaoxiao-studio-model-image', event.target.value);
+    if (event.target.id === 'generation' + generationCapitalized() + 'Model' && event.target.value) {
+      localStorage.setItem('xiaoxiao-studio-model-' + generationKind, event.target.value);
+      resetRouteFields(generationKind);
+    } else if (routeField(event.target)) {
+      rememberStudioRoutes(generationKind);
+    }
     saveCreationDraft();
     updateGenerationComposer();
   }

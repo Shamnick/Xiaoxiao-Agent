@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/Shamnick/Xiaoxiao-Agent/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/Shamnick/Xiaoxiao-Agent/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version 0.6.19" src="https://img.shields.io/badge/version-0.6.19-584985">
+  <img alt="Version 0.6.20" src="https://img.shields.io/badge/version-0.6.20-584985">
   <img alt="Electron" src="https://img.shields.io/badge/desktop-Electron-183449">
   <img alt="macOS Apple Silicon" src="https://img.shields.io/badge/source%20tested-macOS%20Apple%20Silicon-6a8b7c">
 </p>
@@ -30,7 +30,9 @@ Xiaoxiao Agent 是一个独立开发的多模型桌面工作空间。打开本�
 
 ![对话、创作中心、设置和局部改稿的浅深色界面](docs/images/silk-workspaces.jpg)
 
-> 界面截图使用演示数据。0.6.19 已在开发用 Apple Silicon Mac 从「应用程序」启动并验证对话交付。对外分发仍待正式签名、公证和干净设备验收。任务工具需要模型支持工具调用，视觉实验室需要支持图像输入的模型。
+> 界面截图使用演示数据。0.6.20 已在开发用 Apple Silicon Mac 从「应用程序」启动并验证对话交付。对外分发仍待正式签名、公证和干净设备验收。任务工具需要模型支持工具调用，视觉实验室需要支持图像输入的模型。
+
+在创作中心打开「生成设置」，可以为生图、视频、语音分别选择模型或从服务商目录添加模型 ID。工作室会记住选择及该模型的自定义接口。要重试旧作品，先确认当前设置，再点「用当前模型与参数重新生成这一轮」。
 
 点开首页丝结，进入「试试局部改稿」。可以只改海报标题，比较后采纳，预览并导出 PNG 海报，再把满意的一句送到语音工作室。在 Mac 上选择系统语音即可导出 WAV。已取得任务号的视频，重启后也能从历史继续查询。生图会话里可导入参考图，也可选中历史图片继续修改，在同一画布比较并导出原图。[分期进度](docs/innovation-roadmap.md)
 

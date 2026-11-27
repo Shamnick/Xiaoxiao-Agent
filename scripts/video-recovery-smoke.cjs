@@ -80,6 +80,7 @@ async function waitForNetworkEvent(event, label) {
     db.write('providers',[connection]);
     let page = await launch();
     await page.locator('#generationTabVideo').click();
+    await page.locator('#generationVideoModel').selectOption('local');
     await page.locator('#generationVideoPrompt').fill('恢复验证');
     await page.locator('#runGeneration').click();
     // Do not kill on an unresolved Promise. Wait for the receipt actually written by the main process.

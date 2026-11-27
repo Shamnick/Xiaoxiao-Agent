@@ -571,8 +571,9 @@
       <section id="providerPanel" role="tabpanel" aria-labelledby="providerTab">
         <div class="provider-layout">
           <aside class="provider-sidebar">
-            <div class="section-label">已保存的模型</div>
+            <div class="section-label">已保存的连接</div>
             <div id="providerList"></div>
+            <p id="connectionModels" class="muted" hidden></p>
             <button id="addProvider" class="quiet add-provider"><span class="ui-icon i-plus" aria-hidden="true"></span> 新增模型配置</button>
           </aside>
           <form id="providerForm">
@@ -598,7 +599,7 @@
                     <option value="ollama">Ollama</option>
                   </select>
                 </label>
-                <label>模型 ID<input name="model" list="availableModels" placeholder="填写服务商提供的 ID" required><datalist id="availableModels"></datalist></label>
+                <label>连接主模型 ID<input name="model" list="availableModels" placeholder="填写服务商提供的 ID" aria-describedby="connectionModels" required><datalist id="availableModels"></datalist></label>
               </div>
               <label>Base URL<input name="baseUrl" placeholder="API 基础地址，例如 https://服务域名/v1" type="url"></label>
               <label>API Key<input name="apiKey" type="password" autocomplete="new-password" placeholder="留空保留已保存的 Key" aria-describedby="keyStatus"></label>
@@ -736,7 +737,7 @@
             <p id="generationEvidence" class="generation-evidence" role="status"></p>
             <section id="generationPanelImage" class="generation-panel" role="tabpanel" aria-labelledby="generationTabImage">
               <div class="generation-fields">
-                <div class="generation-span image-model-field"><label for="generationImageModel">生图模型</label><select id="generationImageModel"></select><button type="button" id="chooseImageModel" class="quiet">从服务商目录选择…</button></div>
+                <div class="generation-span studio-model-field"><label for="generationImageModel">生图模型</label><select id="generationImageModel" aria-describedby="generationEvidence"></select><button type="button" id="chooseImageModel" class="quiet">从服务商目录选择…</button></div>
                 <label>尺寸<select id="generationImageSize"><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option><option>1792x1024</option></select></label>
                 <label>质量<select id="generationImageQuality"><option value="">模型默认</option><option value="standard">标准</option><option value="hd">高清</option></select></label>
                 <label>输出数量<select id="generationImageCount"><option value="1">1 张</option><option value="2">2 张</option><option value="4">4 张</option></select></label>
@@ -750,7 +751,7 @@
             </section>
             <section id="generationPanelVideo" class="generation-panel" role="tabpanel" aria-labelledby="generationTabVideo" hidden>
               <div class="generation-fields">
-                <label class="generation-span">模型<select id="generationVideoModel"></select></label>
+                <div class="generation-span studio-model-field"><label for="generationVideoModel">视频模型</label><select id="generationVideoModel" aria-describedby="generationEvidence"></select><button type="button" id="chooseVideoModel" class="quiet">从服务商目录选择…</button></div>
                 <label>时长<select id="generationVideoDuration"><option value="4">4 秒</option><option value="5" selected>5 秒</option><option value="8">8 秒</option><option value="12">12 秒</option><option value="10">10 秒</option><option value="15">15 秒</option><option value="20">20 秒</option></select></label>
                 <label>画幅<select id="generationVideoAspect"><option value="16:9">横屏 16:9</option><option value="9:16">竖屏 9:16</option><option value="1:1">方形 1:1</option></select></label>
                 <label>镜头运动<select id="generationVideoMotion"><option value="auto">自动</option><option value="static">固定镜头</option><option value="pan">平移</option><option value="zoom">推进</option><option value="orbit">环绕</option></select></label>
@@ -762,7 +763,7 @@
             </section>
             <section id="generationPanelAudio" class="generation-panel" role="tabpanel" aria-labelledby="generationTabAudio" hidden>
               <div class="generation-fields">
-                <label class="generation-span">模型<select id="generationAudioModel"></select></label>
+                <div class="generation-span studio-model-field"><label for="generationAudioModel">语音模型</label><select id="generationAudioModel" aria-describedby="generationEvidence"></select><button type="button" id="chooseAudioModel" class="quiet">从服务商目录选择…</button></div>
                 <label id="localVoiceLabel" hidden>本机音色<select id="generationAudioLocalVoice"><option value="default">系统默认</option><option value="Tingting">婷婷 · 普通话</option><option value="Samantha">Samantha · 英语</option></select></label>
                 <span id="localVoiceFormat" hidden>WAV · 本机合成</span>
                 <label>音色<select id="generationAudioVoice"><option>alloy</option><option>ash</option><option>coral</option><option>echo</option><option>fable</option><option>onyx</option><option>nova</option><option>sage</option><option>shimmer</option></select></label>

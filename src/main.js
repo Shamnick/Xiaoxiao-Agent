@@ -211,6 +211,8 @@ handle('generation:run', async (sender, input) => {
   if (!input || typeof input.requestId !== 'string' || !/^[a-f0-9-]{36}$/.test(input.requestId)) throw Error('生成请求无效');
   const controller = new AbortController();
   if (generationRequests.has(sender.id)) throw Error('请等当前媒体请求结束');
+  // Persist the selected route alongside the job before an external submission.
+  sender.session.flushStorageData();
   const request = { id: input.requestId, controller };
   const options = {
     signal: AbortSignal.any([controller.signal, AbortSignal.timeout(11 * 60 * 1000)]),

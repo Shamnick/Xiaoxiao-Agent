@@ -1284,10 +1284,15 @@ function fillProviders(preferred = current?.providerId || $('modelSelect').value
   renderProviders(); update();
 }
 async function refreshProviders(preferred) { providers = await api.providers.list(); fillProviders(preferred); }
-function resetProvider(provider = null) {
+function resetProvider(provider = null, selected = null) {
   editing = provider?.id || null; form.reset(); $('availableModels').replaceChildren();
   for (const key of ['name','kind','baseUrl','model']) if (provider) form.elements.namedItem(key).value = provider[key] ?? '';
   form.elements.namedItem('stream').checked = provider ? provider.stream !== false : true;
+  const aliases = providers.filter(row => provider && row.connectionId === provider.id);
+  const related = $('connectionModels');
+  related.hidden = !aliases.length;
+  related.textContent = (selected?.connectionId ? '当前所选模型为 ' + selected.model + '。' : '') +
+    '共用此连接的其他模型：' + aliases.map(row => row.model).join('、');
   $('providerFormTitle').textContent = provider ? '编辑模型配置' : '新增模型配置';
   $('keyStatus').textContent = provider?.hasKey ? 'API Key 已加密保存；留空可保留。' : '尚未保存 API Key。';
   $('deleteProvider').disabled = !editing;
@@ -1329,7 +1334,7 @@ async function openSettings(providerId) {
   await settingsAction(async()=>{
     status('正在加载设置…'); await refreshProviders();
     const active = providers.find(p => p.id === providerId) || selectedProvider();
-    resetProvider(providers.find(p => p.id === (active?.connectionId || active?.id)) || providers[0]);
+    resetProvider(providers.find(p => p.id === (active?.connectionId || active?.id)) || providers[0], active);
     settingsLoaded=false; const settings=await api.settings.get();
     $('mcpServers').value=JSON.stringify(settings.mcpServers || [],null,2); $('maxSteps').value=settings.maxSteps ?? 12; settingsLoaded=true; status('');
   });
@@ -1420,7 +1425,7 @@ form.onsubmit=event=>{event.preventDefault();
   const data = providerDraft();
   settingsAction(async()=>{
   status('正在保存…'); const id=await api.providers.save({...data,id:editing});
-  await refreshProviders(current?.providerId || id); resetProvider(providers.find(p=>p.id===id)); status('模型配置已保存。');
+  await refreshProviders(); resetProvider(providers.find(p=>p.id===id)); status('模型配置已保存。');
 });};
 $('testProvider').onclick=()=>settingsAction(async()=>{ status('正在用当前表单测试文本对话…'); status(plain(await api.providers.test({...providerDraft(),id:editing}))); });
 $('fetchModels').onclick=()=>settingsAction(async()=>{ status('正在读取当前连接的模型目录…'); const models=await api.providers.models({...providerDraft(),id:editing}); $('availableModels').replaceChildren(...models.map(name=>new Option(name,name))); status(`已获取 ${models.length} 个模型，可在模型 ID 中输入或选择。`); form.elements.namedItem('model').focus(); });

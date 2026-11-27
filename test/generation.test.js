@@ -24,6 +24,13 @@ test('generates an image from a standard JSON response', async () => {
   assert.equal(result.data, png);
 });
 
+test('advanced options cannot reroute a media request to another model', async () => {
+  for (const kind of ['image', 'video', 'audio']) {
+    await assert.rejects(generateAsset(provider, {kind, prompt:'test', options:{model:'different'}},
+      {request:assert.fail}), /移除 model/);
+  }
+});
+
 test('passes image count and creative options through and retains all returned images', async () => {
   const requested = [];
   const result = await generateAsset(provider, {
@@ -120,7 +127,7 @@ test('reference edits guard the selected destination, MIME and reserved fields b
     [{destination:{...input.destination, model:'changed'}}, /发送目标/],
     [{destination:{...input.destination, baseUrl:'https://other.invalid'}}, /发送目标/],
     [{reference:{...input.reference, mimeType:'image/jpeg'}}, /原图/],
-    [{options:{image:'other'}}, /所选原图/], [{options:{model:'other'}}, /模型与提示词/],
+    [{options:{image:'other'}}, /所选原图/], [{options:{model:'other'}}, /移除 model/],
     [{editEndpoint:'https://other.invalid/'}, /接口路径/]
   ]) await assert.rejects(generateAsset(provider,{...input,...change},{request}), message);
   assert.equal(calls,0);

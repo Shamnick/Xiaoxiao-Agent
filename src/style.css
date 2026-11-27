@@ -996,9 +996,9 @@ body:has(#generationStudio:not([hidden])) > :is(.main, #sidebar, #toggleSidebar)
 .image-issue { display: grid; justify-items: start; gap: 6px; padding: 12px 14px; border-inline-start: 3px solid var(--accent); background: var(--subtle); border-radius: 4px 9px 9px 4px; }
 .image-issue strong { color: var(--text); font-size: 13px; }
 .image-issue p { margin: 0; line-height: 1.6; }
-.image-issue button, .image-model-field button { font-size: 12px; min-height: 30px; color: var(--accent); }
-.image-model-field { display: grid; min-width: 0; gap: 6px; }
-.image-model-field button { justify-self: start; }
+.image-issue button, .studio-model-field button { font-size: 12px; min-height: 30px; color: var(--accent); }
+.studio-model-field { display: grid; min-width: 0; gap: 6px; }
+.studio-model-field button { justify-self: start; }
 #generationPanelImage details[open] label { display: grid; gap: 5px; margin-block-start: 12px; }
 #imageModelDialog { width: min(440px, calc(100vw - 40px)); max-height: calc(100vh - 48px); overflow: auto; }
 #imageModelDialog h2 { margin: 0 0 15px; font-size: 19px; }
@@ -1006,3 +1006,5 @@ body:has(#generationStudio:not([hidden])) > :is(.main, #sidebar, #toggleSidebar)
 #imageCatalogNote { color: var(--muted); font-size: 12px; }
 #imageCatalogList { width: 100%; height: auto; min-height: 132px; }
 #imageCatalogList option { padding: 4px 7px; }
+
+#connectionModels { overflow-wrap: anywhere; }

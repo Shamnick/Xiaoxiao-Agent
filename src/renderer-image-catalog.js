@@ -8,7 +8,7 @@
   const note = $('imageCatalogNote');
   const apply = $('imageCatalogUse');
   let names = [], revision = 0;
-  const imageName = name => /gpt-image|dall-e|flux|seedream|imagen|image-preview/i.test(name);
+  let kind;
 
   function filter() {
     const text = query.value.trim().toLowerCase();
@@ -25,14 +25,18 @@
     try {
       const found = await api.providers.models(connection.value);
       if (ticket !== revision) return;
-      names = found.sort((a,b) => Number(imageName(b)) - Number(imageName(a)) || a.localeCompare(b));
-      note.textContent = found.length ? `共 ${found.length} 个模型 · 图像相关名称排在前面` : '目录为空，可手动填写模型 ID。';
+      const relevant = studioModelNames[kind];
+      names = found.sort((a,b) => Number(relevant.test(b)) - Number(relevant.test(a)) || a.localeCompare(b));
+      note.textContent = found.length ? `共 ${found.length} 个模型 · ${generationLabels[kind]}相关名称排在前面` : '目录为空，可手动填写模型 ID。';
       filter();
     } catch (error) {
       if (ticket === revision) note.textContent = errorMessage(error) + ' 也可以手动填写模型 ID。';
     }
   }
-  $('chooseImageModel').onclick = () => {
+  function openCatalog(studio) {
+    kind = studio;
+    $('imageModelHeading').textContent = '选择' + generationLabels[kind] + '模型';
+    apply.textContent = '用于' + generationLabels[kind];
     if (!providers.length) { setTab('provider'); void openSettings(); return; }
     const current = providers.find(p => p.id === generationModelId());
     connection.replaceChildren(...providers.filter(p => !p.connectionId).map(p => new Option(p.name, p.id)));
@@ -40,7 +44,10 @@
     dialog.showModal();
     query.focus();
     void discover();
-  };
+  }
+  for (const studio of Object.keys(generationTabs)) {
+    $('choose' + generationCapitalized(studio) + 'Model').onclick = () => openCatalog(studio);
+  }
   connection.onchange = discover;
   query.oninput = filter;
   list.onchange = () => { if (list.value) { query.value = list.value; apply.disabled = false; } };
@@ -54,8 +61,9 @@
       await refreshProviders($('modelSelect').value);
       if (!dialog.open || revision !== ticket) return;
       fillGenerationModels(providers);
-      $('generationImageModel').value = id;
-      $('generationImageModel').dispatchEvent(new Event('input', {bubbles:true}));
+      const select = $('generation' + generationCapitalized(kind) + 'Model');
+      select.value = id;
+      select.dispatchEvent(new Event('input', {bubbles:true}));
       dialog.close();
     } catch (error) { if (ticket === revision) note.textContent = errorMessage(error); }
     finally { connection.disabled = query.disabled = list.disabled = false; apply.disabled = !query.value.trim(); }
