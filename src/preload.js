@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld('nova', {
   presence: { sample: call('presence:sample'), dictate: call('presence:dictate') },
   providers: {
     list: call('providers:list'), save: call('providers:save'), delete: call('providers:delete'),
-    rememberModel: call('providers:rememberModel'), models: call('providers:models'), test: call('providers:test')
+    rememberModel: call('providers:rememberModel'), models: call('providers:models'), imageSpec: call('providers:imageSpec'), test: call('providers:test')
   },
   media: { analyze: call('media:analyze'), cancel: call('media:cancel') },
   generation: { receipts: call('generation:receipts'), forget: call('generation:forget'), run: call('generation:run'), cancel: call('generation:cancel'), save: call('generation:save'), saveAll: call('generation:saveAll'), onEvent: subscribe('generation:event') },

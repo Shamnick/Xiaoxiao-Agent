@@ -45,7 +45,7 @@ test('passes image count and creative options through and retains all returned i
     }
   });
   assert.equal(requested[0].n, 2);
-  assert.match(requested[0].prompt, /电影感构图/);
+  assert.doesNotMatch(requested[0].prompt, /电影感构图/);
   assert.match(requested[0].prompt, /text, watermark/);
   assert.equal(requested[0].style, undefined);
   assert.deepEqual(result.assets.map(asset => asset.data), [png, webp]);

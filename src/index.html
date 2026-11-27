@@ -738,10 +738,10 @@
             <section id="generationPanelImage" class="generation-panel" role="tabpanel" aria-labelledby="generationTabImage">
               <div class="generation-fields">
                 <div class="generation-span studio-model-field"><label for="generationImageModel">生图模型</label><select id="generationImageModel" aria-describedby="generationEvidence"></select><button type="button" id="chooseImageModel" class="quiet">从服务商目录选择…</button></div>
-                <label>尺寸<select id="generationImageSize"><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option><option>1792x1024</option></select></label>
-                <label>质量<select id="generationImageQuality"><option value="">模型默认</option><option value="standard">标准</option><option value="hd">高清</option></select></label>
-                <label>输出数量<select id="generationImageCount"><option value="1">1 张</option><option value="2">2 张</option><option value="4">4 张</option></select></label>
-                <label>风格<select id="generationImageStyle"><option value="">模型默认</option><option value="natural">自然</option><option value="vivid">鲜明</option><option value="cinematic">电影感</option><option value="illustration">插画</option></select></label>
+                <label class="generation-span">输出尺寸<select id="generationImageSize" aria-describedby="imageSpecNote"><option value="">模型默认</option></select></label>
+                <label>质量<select id="generationImageQuality" aria-describedby="imageSpecNote"><option value="">模型默认</option></select></label>
+                <label>输出数量<select id="generationImageCount"><option value="1">1 张</option></select></label>
+                <p id="imageSpecNote" class="generation-span spec-note" role="status"></p>
                 <label class="generation-span">排除内容<textarea id="generationImageNegative" rows="2" maxlength="2000" placeholder="可选，例如：模糊、文字、水印…"></textarea></label>
                 <details class="generation-advanced generation-span"><summary>接口与高级参数</summary>
                 <label class="generation-span generation-muted-field">生成接口<input id="generationImageEndpoint" value="/images/generations" spellcheck="false"></label>
@@ -886,6 +886,8 @@
   <script src="chat-drafts.js"></script>
   <script src="renderer.js"></script>
   <script src="renderer-media.js"></script>
+  <script src="renderer-creation-metrics.js"></script>
+  <script src="renderer-image-settings.js"></script>
   <script src="renderer-generation.js"></script>
   <script src="renderer-image-catalog.js"></script>
   <script src="renderer-gallery.js"></script>

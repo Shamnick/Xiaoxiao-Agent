@@ -190,6 +190,7 @@ function restoreFields(row) {
     if (value !== undefined) field.value = value;
   }
   applyStudioRoutes(row.kind);
+  if (row.kind === 'image') syncImageSettings(sameModel ? row.fields : {});
 }
 
 function saveCreationDraft() {
@@ -304,7 +305,10 @@ function setGenerationTab(kind, threadId = activeThreads[kind]) {
   const fields = draft?.fields || turns.at(-1)?.fields;
   resetParameterFields(kind);
   if (fields) restoreFields({ kind, fields });
-  else applyStudioRoutes(kind);
+  else {
+    applyStudioRoutes(kind);
+    if (kind === 'image') syncImageSettings({});
+  }
   for (const [name, [tab, panel]] of Object.entries(generationTabs)) {
     $(tab).setAttribute('aria-selected', String(name === kind));
     $(tab).tabIndex = name === kind ? 0 : -1;
@@ -358,6 +362,12 @@ const studioModelNames = {
   video: /sora|veo|kling|seedance|wan[-_.]?(?:2|video)|hailuo/i,
   audio: /(?:^|[-_/.])tts(?:[-_/.]|$)|kokoro|cosyvoice|speech[-_.]?0[12]/i
 };
+function syncImageSettings(fields) {
+  if (generationKind === 'image' && !$('generationStudio').hidden) {
+    void imageSettings.sync(providers.find(row => row.id === generationModelId('image')), fields);
+  }
+}
+
 function fillGenerationModels(rows) {
   for (const kind of Object.keys(generationTabs)) {
     const select = $('generation' + generationCapitalized(kind) + 'Model');
@@ -374,6 +384,7 @@ function fillGenerationModels(rows) {
     select.value = available ? preferred : '';
     if (select.value !== previousModel) resetRouteFields(kind);
   }
+  syncImageSettings();
 }
 
 function renderGenerationResult() {
@@ -473,6 +484,12 @@ function renderGenerationResult() {
     } else {
       preview.textContent = item.status || (item.state === 'running' ? '正在生成…' : '等待生成…');
     }
+    if (item.metrics) {
+      if (item.state === 'running') preview.hidden = true;
+      const card = creationMetrics.create(item);
+      article.insertBefore(card, buttons);
+      creationMetrics.update(item, runningCreation?.item === item ? performance.now() - runningCreation.startTick : 0);
+    }
     if (!['queued', 'running'].includes(item.state)) {
       if (item.receipt === 'accepted') {
         const resume = document.createElement('button');
@@ -531,7 +548,11 @@ function renderAssets(output, assets) {
       element = document.createElement('img');
       element.className = 'generation-result';
       element.alt = `生成的图片 ${index + 1}`;
-      element.onload = () => { if (element.naturalWidth > 0) void recordMediaPreview(output.dataset.id); };
+      element.onload = () => {
+        if (!element.naturalWidth) return;
+        caption.textContent = element.naturalWidth + ' × ' + element.naturalHeight + ' · ' + asset.mimeType.split('/')[1].toUpperCase();
+        void recordMediaPreview(output.dataset.id);
+      };
       element.src = source;
       const thumbnail = document.createElement('button');
       thumbnail.type = 'button';
@@ -539,7 +560,9 @@ function renderAssets(output, assets) {
       thumbnail.dataset.assetIndex = index;
       thumbnail.setAttribute('aria-label', `查看第 ${index + 1} 张大图`);
       thumbnail.title = '查看大图';
-      thumbnail.append(element);
+      const caption = document.createElement('span');
+      caption.className = 'creation-image-caption';
+      thumbnail.append(element, caption);
       thumbnail.onclick = () => openCreationGallery(output, thumbnail);
       output.append(thumbnail);
       continue;
@@ -655,7 +678,7 @@ function updateGenerationComposer() {
       $(id).closest('label, details').hidden = local;
     }
   }
-  $('runGeneration').disabled = importingReference === referenceSelection || !historyLoaded || !hasModel || !prompt.value.trim();
+  $('runGeneration').disabled = importingReference === referenceSelection || !historyLoaded || !hasModel || (generationKind === 'image' && imageSettings.pending()) || !prompt.value.trim();
   if (local && prompt.value.length > 3000) $('runGeneration').disabled = true;
   updateSpeechExcerpt();
   updateMediaEvidence();
@@ -736,7 +759,6 @@ function generationInput(kind, fields, prompt) {
     input.size = value('Size');
     input.quality = value('Quality');
     input.count = Number(value('Count')) || 1;
-    input.style = value('Style');
     input.negativePrompt = value('Negative').trim();
     input.options = parseGenerationOptions(value('Options'));
   }
@@ -858,11 +880,25 @@ function renderCreationQueue() {
 api.generation.onEvent(event => {
   if (!runningCreation || runningCreation.cancelled || event.requestId !== generationRequestId) return;
   const { item } = runningCreation;
+  if (item.metrics) {
+    const m = item.metrics;
+    m.phase = event.phase;
+    if (event.phase === 'render') {
+      m.percent = event.percent;
+      m.attempt = event.attempt;
+    }
+    if (event.httpStatus != null) {
+      m.httpStatus = event.httpStatus;
+      m.headersMs = Math.round(performance.now() - runningCreation.startTick);
+    }
+    if (event.bytes != null) { m.received = event.bytes; m.partBytes = event.partBytes; m.partTotal = event.partTotal; }
+    creationMetrics.update(item, performance.now() - runningCreation.startTick);
+  }
   item.status = runningCreation.status = event.text;
   if (creationThread(item) === activeThread()) {
     $('generationStatus').textContent = event.text;
     const preview = document.getElementById('creation-' + item.id)?.querySelector('.creation-preview');
-    if (preview && item.state === 'running') preview.textContent = event.text;
+    if (preview && !item.metrics && item.state === 'running') preview.textContent = event.text;
   }
 });
 
@@ -973,6 +1009,7 @@ function enqueueCreation(prompt, fields, parentId, excerptLabel, reference, prio
   try { input = generationInput(generationKind, fields, prompt.trim()); }
   catch (error) { $('generationStatus').textContent = errorMessage(error); return false; }
   if (!historyLoaded || importingReference === referenceSelection) return false;
+  if (generationKind === 'image' && imageSettings.pending()) { $('generationStatus').textContent = '正在读取模型规格，请稍候。'; return false; }
   if (!isLocalVoice(input.kind,input.providerId) && !providers.some(provider => provider.id === input.providerId)) {
     $('generationStatus').textContent = '请选择可用的生成模型。';
     return false;
@@ -1069,6 +1106,16 @@ function contextualPrompt(item) {
 async function finishCreation(item, state, status, result) {
   const assets = result && (result.assets || [result]);
   const completed = { ...item, state, status };
+  if (item.metrics) {
+    completed.metrics = {...item.metrics};
+    const job = runningCreation;
+    if (job?.item === item) completed.metrics.elapsed = Math.round(performance.now() - job.startTick);
+    if (assets) {
+      completed.metrics.outputs = assets.length;
+      completed.metrics.outputBytes = assets.reduce((sum, a) => sum + Math.floor(a.data.length * 3 / 4) - (a.data.match(/=+$/)?.[0].length || 0), 0);
+      if (Number.isSafeInteger(result.totalTokens)) completed.metrics.tokens = result.totalTokens;
+    }
+  }
   if (item.kind === 'image' && assets) completed.imageIndices = creationImageIndices(assets);
   try {
     await archiveOperation('readwrite', (records, media) => {
@@ -1092,6 +1139,16 @@ async function processCreationQueue() {
   const { input, item } = job;
   generationRequestId = item.id;
   item.state = 'running';
+  job.startTick = performance.now();
+  if (item.kind === 'image') {
+    item.metrics = { startedAt:Date.now(), phase:'prepare' };
+    item.metrics.queuedMs = Math.max(0, item.metrics.startedAt - item.createdAt);
+    job.clock = setInterval(() => {
+      if (item.state === 'running' && activeThread() === creationThread(item) && !$('generationStudio').hidden) {
+        creationMetrics.update(item, performance.now() - job.startTick);
+      }
+    }, 250);
+  }
   item.status = job.status = input.cancelRemote ? '正在请求服务端取消…' : input.resume ? '正在连接原视频任务…' : '准备生成…';
   if (activeThread() === item.threadId) {
     $('generationStatus').textContent = item.status;
@@ -1127,6 +1184,7 @@ async function processCreationQueue() {
     }
     await finishCreation(item, job.cancelled || item.receipt === 'canceled' ? 'stopped' : 'failed', note);
   } finally {
+    clearInterval(job.clock);
     runningCreation = null;
     generationRequestId = '';
     renderCreationQueue();
@@ -1175,6 +1233,7 @@ document.addEventListener('input', event => {
     if (event.target.id === 'generation' + generationCapitalized() + 'Model' && event.target.value) {
       localStorage.setItem('xiaoxiao-studio-model-' + generationKind, event.target.value);
       resetRouteFields(generationKind);
+      if (generationKind === 'image') syncImageSettings();
     } else if (routeField(event.target)) {
       rememberStudioRoutes(generationKind);
     }

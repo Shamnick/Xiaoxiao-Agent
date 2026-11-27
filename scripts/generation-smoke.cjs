@@ -64,11 +64,13 @@ async function run() {
   let app, png, variants;
   const requests = [];
   const edits = [];
+  let releaseFirst;
+  const firstResponse = new Promise(resolve => { releaseFirst = resolve; });
   const imagePrompts = [], videoPrompts = [], audioPrompts = [];
   const server = createServer(async (req, res) => {
     requests.push(`${req.method} ${req.url}`);
     if (req.url === '/v1/models') {
-      return res.writeHead(200, {'content-type':'application/json'}).end(JSON.stringify({data:[{id:'fixture-chat'},{id:'gpt-image-fixture'}]}));
+      return res.writeHead(200, {'content-type':'application/json'}).end(JSON.stringify({data:[{id:'fixture-chat'},{id:'fixture-generation',capabilities:{image:{sizes:['1024x1024','1024x1536','3840x2160'],qualities:['high'], counts:[1,2,4]}}},{id:'gpt-image-fixture'}]}));
     }
     if (req.url === '/v1/images/edits' && req.method === 'POST') {
       const form = await new Response(req, {headers: req.headers}).formData();
@@ -84,6 +86,12 @@ async function run() {
       const body = JSON.parse(raw);
       if (req.url === '/v1/images/generations') {
         imagePrompts.push(body.prompt);
+        if (imagePrompts.length === 1) {
+          assert.equal(body.size, '3840x2160');
+          assert.equal(body.quality, 'high');
+          assert(!Object.hasOwn(body, 'style'));
+          await firstResponse;
+        }
         if (body.prompt === '模拟失败' && imagePrompts.filter(prompt => prompt === '模拟失败').length === 1) {
           return res.writeHead(503).end();
         }
@@ -182,9 +190,23 @@ async function run() {
     assert.equal(await page.locator('#generationStudio').evaluate(dialog => dialog.classList.contains('generation-focus')), true);
     await page.locator('#generationFocus').click();
 
+    await page.locator('#generationImageSize').selectOption('3840x2160');
+    await page.locator('#generationImageQuality').selectOption('high');
+    assert.equal(await page.locator('#generationImageStyle').count(), 0);
     await page.locator('#generationImagePrompt').fill('一个玻璃质感的海面');
     await page.locator('#runGeneration').click();
+    const live = page.locator('.creation-telemetry');
+    await live.getByText('等待服务响应', {exact:true}).waitFor();
+    const timer = live.locator('[data-metric="0"] dd');
+    const initialTime = await timer.textContent();
+    await page.waitForFunction(t => document.querySelector('.creation-telemetry dd')?.textContent !== t, initialTime);
+    assert.equal(await live.locator('progress').getAttribute('value'), null);
+    if (qa) await page.screenshot({path:path.join(qa,'image-live-metrics.png'), scale:'css'});
+    releaseFirst();
     await page.locator('.generation-result').waitFor();
+    await live.getByText('生成完成', {exact:true}).waitFor();
+    assert.equal(await live.locator('[data-metric="2"] dd').textContent(), '200');
+    await page.getByText('560 × 440 · PNG', {exact:true}).waitFor();
     assert.equal(await page.locator('.generation-result').getAttribute('alt'), '生成的图片 1');
     assert.equal(await page.locator('.generation-result').evaluate(image => image.naturalWidth), 560);
     await page.locator('#generationEvidence').filter({hasText:'有可预览的作品'}).waitFor();

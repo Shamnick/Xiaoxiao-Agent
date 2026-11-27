@@ -10,7 +10,8 @@ const { emptyMetrics, applyMetric } = require('./conversation-metrics');
 const { taskPlanTool, taskDraftTool, taskDrafts } = require('./task-plan');
 const { waitForUser, questionTool } = require('./task-interaction');
 const { parallelAnalysisTool } = require('./task-analysis');
-const {config,runAgent,analyzeMedia,visualContent,models}=require('./providers');
+const {config,runAgent,analyzeMedia,visualContent,models,modelEntries}=require('./providers');
+const { imageSpec } = require('./image-spec');
 const { generateAsset, pollVideo, cancelRemoteVideo, videoCancelUrl } = require('./generation');
 const { synthesizeLocalSpeech } = require('./local-speech');
 const { createArtifactTool } = require('./artifacts');
@@ -167,6 +168,15 @@ function providerForCheck(input, listing) {
   return draft;
 }
 handle('providers:models', (_, input) => models(providerForCheck(input, true), AbortSignal.timeout(15000)));
+handle('providers:imageSpec', async (_, id) => {
+  const p = provider(id);
+  try {
+    const entries = await modelEntries(p, AbortSignal.timeout(6000));
+    return imageSpec(p.model, entries.find(row => row.id === p.model));
+  } catch {
+    return { ...imageSpec(p.model), offline:true };
+  }
+});
 handle('providers:test', async (_, input) => {
   const p = providerForCheck(input, false);
   return runAgent(p,[{role:'user',content:'Reply with OK.'}],{signal:AbortSignal.timeout(30000),maxSteps:1});

@@ -23,6 +23,7 @@ async function run() {
   const restored = path.join(root, 'restored');
   let requests = 0, app, page;
   const server = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/v1/models') return res.end(JSON.stringify({data:[{id:'fixture'}]}));
     requests++;
     res.setHeader('Content-Type', 'application/json');
     if (req.method === 'POST' && req.url === '/v1/images/generations') return res.end(JSON.stringify({data:[{b64_json:png}]}));
@@ -57,6 +58,7 @@ async function run() {
     await page.reload();
     await enter(page);
     await page.locator('#openGenerationStudio').click();
+    await page.locator('#generationImageModel').selectOption(ids.providerId);
     await page.locator('#generationImagePrompt').fill('升级前的作品');
     await page.locator('#runGeneration').click();
     await page.locator('.generation-result').waitFor();

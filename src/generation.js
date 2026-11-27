@@ -20,13 +20,14 @@ function endpoint(baseUrl, value, fallback) {
   return url.href;
 }
 
-async function readLimited(response, limit, label) {
+async function readLimited(response, limit, label, report) {
   const advertised = Number(response.headers.get('content-length'));
   if (Number.isFinite(advertised) && advertised > limit) throw Error(`${label}超过 ${Math.round(limit / 1024 / 1024)} MiB 限制`);
   if (!response.body) return Buffer.alloc(0);
   const reader = response.body.getReader();
   const chunks = [];
-  let total = 0;
+  let total = 0, lastUpdate = 0;
+  const length = !response.headers.get('content-encoding') && advertised > 0 ? advertised : null;
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -34,6 +35,10 @@ async function readLimited(response, limit, label) {
       total += value.byteLength;
       if (total > limit) throw Error(`${label}超过 ${Math.round(limit / 1024 / 1024)} MiB 限制`);
       chunks.push(Buffer.from(value));
+      if (report && performance.now() - lastUpdate >= 150) {
+        report(total, length);
+        lastUpdate = performance.now();
+      }
     }
   } catch (error) {
     await reader.cancel().catch(() => {});
@@ -41,6 +46,7 @@ async function readLimited(response, limit, label) {
   } finally {
     reader.releaseLock();
   }
+  report?.(total, length);
   return Buffer.concat(chunks, total);
 }
 
@@ -50,8 +56,8 @@ async function jsonResponse(response, limit = MAX_JSON) {
   catch { throw Error('生成服务返回的 JSON 无法解析'); }
 }
 
-async function mediaBytes(response, label) {
-  const bytes = await readLimited(response, MAX_OUTPUT, label);
+async function mediaBytes(response, label, report) {
+  const bytes = await readLimited(response, MAX_OUTPUT, label, report);
   if (!bytes.length) throw Error(`${label}为空，未取得文件`);
   return bytes;
 }
@@ -63,13 +69,13 @@ function base64Asset(data, mimeType, filename) {
   return { data: bytes.toString('base64'), mimeType, filename };
 }
 
-async function urlAsset(url, mimeType, filename, signal, request) {
+async function urlAsset(url, mimeType, filename, signal, request, transfer) {
   let parsed;
   try { parsed = new URL(url); } catch { throw Error('生成服务返回了无效的资源地址'); }
   if (!['http:', 'https:'].includes(parsed.protocol)) throw Error('生成服务返回了不支持的资源地址');
   const response = await request(parsed.href, { signal, redirect: 'follow' });
   if (!response.ok) throw Error(`读取生成结果失败 HTTP ${response.status}`);
-  const data = await mediaBytes(response, '生成结果');
+  const data = await mediaBytes(response, '生成结果', transfer?.('asset'));
   return { data: data.toString('base64'), mimeType: mimeType || response.headers.get('content-type') || 'application/octet-stream', filename };
 }
 
@@ -102,11 +108,11 @@ function responseAssets(payload, kind) {
   return asset ? [asset] : [];
 }
 
-async function materializeAssets(assets, signal, request) {
+async function materializeAssets(assets, signal, request, transfer) {
   const results = [];
   let bytes = 0;
   for (const asset of assets) {
-    const result = asset.url ? await urlAsset(asset.url, asset.mimeType, asset.filename, signal, request) : asset;
+    const result = asset.url ? await urlAsset(asset.url, asset.mimeType, asset.filename, signal, request, transfer) : asset;
     bytes += Buffer.byteLength(result.data, 'base64');
     if (bytes > 128 * 1024 * 1024) throw Error('批量生成结果超过 128 MiB 限制');
     results.push(result);
@@ -170,13 +176,64 @@ function imageHttpError(status) {
   return Error(`生成服务返回 HTTP ${status}。${hint}`);
 }
 
-async function imageResponse(response, signal, request) {
+function pollAddress(baseUrl, address) {
+  const base = new URL(baseUrl.replace(/\/+$/, '') + '/');
+  const next = new URL(address, base);
+  if (next.origin !== base.origin || !next.pathname.startsWith(base.pathname) || next.username || next.password || next.hash) {
+    throw Error('图像任务的查询地址不属于当前 API 连接');
+  }
+  return next.href;
+}
+
+function remotePercent(payload) {
+  const explicit = payload.progress_percent ?? payload.percentage;
+  if (Number.isFinite(explicit) && explicit >= 0 && explicit <= 100) return explicit;
+  const match = typeof payload.progress === 'string' && /^(\d+(?:\.\d+)?)%$/.exec(payload.progress);
+  return match && Number(match[1]) <= 100 ? Number(match[1]) : null;
+}
+
+async function awaitImageOutput(payload, provider, options, transfer) {
+  const {signal, request, pollDelayMs, onStatus} = options;
+  const route = payload?.status_url ?? payload?.polling_url;
+  if (typeof route !== 'string' || !route || responseAssetsPresent(payload)) return payload;
+  const url = pollAddress(provider.baseUrl, route);
+  for (let attempt = 1; attempt <= 90; attempt++) {
+    if (payload.error || /^(failed|error|cancelled|canceled)$/i.test(payload.status)) throw Error('服务端报告图像任务失败或已取消');
+    const percent = remotePercent(payload);
+    onStatus({phase:'render', text:'等待服务端生成', attempt:attempt - 1, percent});
+    await wait(pollDelayMs, signal);
+    const result = await request(url, {headers:headers(provider), signal, redirect:'error'});
+    if (!result.ok) { await result.body?.cancel(); throw imageHttpError(result.status); }
+    const raw = await readLimited(result, 96 * 1024 * 1024, '图像任务响应', transfer('pollReceive'));
+    try { payload = JSON.parse(raw.toString()); }
+    catch { throw Error('图像任务查询返回了无效 JSON'); }
+    if (!payload || typeof payload !== 'object') throw Error('图像任务查询结果无效');
+    if (responseAssetsPresent(payload) || /^(done|success|succeeded|completed)$/i.test(payload.status)) return payload;
+  }
+  throw Error('已结束本机查询，服务端尚未返回作品，请核对服务商任务记录');
+}
+
+function responseAssetsPresent(payload) {
+  return Boolean(payload?.data?.length || payload?.data?.url || payload?.output || payload?.result || payload?.image_url || payload?.image_base64);
+}
+
+async function imageResponse(response, provider, options) {
+  const {signal, request, onStatus} = options;
   const type = (response.headers.get('content-type') || '').toLowerCase();
   if (type.includes('text/html')) {
     await response.body?.cancel();
     throw Error('接口返回了网页，没有返回图片。请核对 Base URL 是否需要 /v1，以及生成接口路径。');
   }
-  const raw = await readLimited(response, type.includes('image/') ? MAX_OUTPUT : 96 * 1024 * 1024, '图像响应');
+  let received = 0;
+  function transfer(phase) {
+    const previous = received;
+    return (bytes, total) => {
+      received = previous + bytes;
+      onStatus({phase, text:phase === 'asset' ? '正在接收图像文件' : '正在接收接口响应',
+        bytes:received, partBytes:bytes, partTotal:total >= bytes ? total : null});
+    };
+  }
+  const raw = await readLimited(response, type.includes('image/') ? MAX_OUTPUT : 96 * 1024 * 1024, '图像响应', transfer('receive'));
   if (!raw.length) throw Error('生成结果为空，未取得文件');
   if (detectImage(raw)) return normalizeImage({data:raw.toString('base64')});
   const prefix = raw.subarray(0, 256).toString().trimStart();
@@ -185,12 +242,13 @@ async function imageResponse(response, signal, request) {
   let payload;
   try { payload = JSON.parse(raw.toString()); }
   catch { throw Error('图像接口返回了无效 JSON，请检查网关的响应格式。'); }
+  payload = await awaitImageOutput(payload, provider, options, transfer);
   if (payload?.error) throw Error('服务在响应中报告生成失败。请核对模型权限与所选参数。');
   if (payload?.choices && !payload.data) throw Error('接口返回了对话响应，请选择图像生成模型和对应的生成接口。');
   const outputs = responseAssets(payload, 'image');
   if (!outputs.length) throw Error('响应中没有图像文件。请确认服务支持图像接口并返回图片地址或 base64。');
-  const images = (await materializeAssets(outputs, signal, request)).map(normalizeImage);
-  return { ...images[0], assets: images };
+  const images = (await materializeAssets(outputs, signal, request, transfer)).map(normalizeImage);
+  return { ...images[0], assets: images, ...(Number.isSafeInteger(payload.usage?.total_tokens) && payload.usage.total_tokens >= 0 && {totalTokens:payload.usage.total_tokens}) };
 }
 
 async function generateAsset(provider, input, { signal, request = fetch, pollDelayMs = 2000, onStatus = () => {}, onSubmit = () => {}, onVideoId = () => {} } = {}) {
@@ -205,8 +263,6 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
     : endpoint(provider.baseUrl, input.endpoint, defaults[kind]);
   let requestPrompt = prompt;
   if (kind === 'image') {
-    const stylePrompt = ({ cinematic: '电影感构图、层次光影与克制的色彩', illustration: '编辑插画风格、清晰形状语言与精致配色' })[input.style];
-    if (stylePrompt) requestPrompt += `\n\n视觉风格：${stylePrompt}。`;
     if (input.negativePrompt) requestPrompt += `\n\n请避免：${String(input.negativePrompt).slice(0, 2000)}。`;
   }
   if (kind === 'video') {
@@ -217,22 +273,24 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
     if (input.negativePrompt) requestPrompt += `\n\n请避免：${String(input.negativePrompt).slice(0, 2000)}。`;
   }
   const body = kind === 'image'
-    ? { model: provider.model, prompt: requestPrompt, size: String(input.size || '1024x1024'), n: Math.min(4, Math.max(1, Number(input.count) || 1)) }
+    ? { model: provider.model, prompt: requestPrompt, ...(input.size && {size:String(input.size)}), ...(Number(input.count) > 1 && {n:Math.min(4, Math.floor(input.count))}) }
     : kind === 'video'
       ? { model: provider.model, prompt: requestPrompt, seconds: String(Number(input.duration) || 5), size: ({ '16:9': '1280x720', '9:16': '720x1280', '1:1': '1024x1024' })[input.aspectRatio] || '1280x720' }
       : { model: provider.model, input: prompt, voice: String(input.voice || 'alloy'), response_format: String(input.format || 'mp3'), speed: Number(input.speed) || 1 };
   if (kind === 'image') {
     if (input.quality) body.quality = String(input.quality);
-    if (['natural', 'vivid'].includes(input.style)) body.style = String(input.style);
   }
   if (input.options !== undefined) {
     if (!input.options || typeof input.options !== 'object' || Array.isArray(input.options)
       || JSON.stringify(input.options).length > 16000) throw Error('高级参数需要是有效 JSON 对象，且不超过 16 KiB');
+    if (kind === 'image' && ['size', 'quality', 'n'].some(key => Object.hasOwn(body, key) && Object.hasOwn(input.options, key))) {
+      throw Error('高级参数与所选输出规格重复，请移除重复的 size、quality 或 n。');
+    }
     if (Object.hasOwn(input.options, 'model')) throw Error('请在模型选择器中选择模型，并从高级参数中移除 model。');
     if (editingImage && Object.hasOwn(input.options, 'prompt')) throw Error('请在工作室中填写参考图的提示词');
     Object.assign(body, input.options);
   }
-  onStatus({ phase: 'submit', text: kind === 'video' ? '正在提交视频生成任务…' : '正在提交生成任务…' });
+  onStatus({ phase: 'submit', text: kind === 'image' ? '正在等待服务响应' : kind === 'video' ? '正在提交视频生成任务…' : '正在提交生成任务…' });
   const init = { method: 'POST', headers: headers(provider), body: JSON.stringify(body), signal, redirect: 'error' };
   if (editingImage) {
     init.body = imageEditForm(input.reference, body);
@@ -241,11 +299,12 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   signal?.throwIfAborted();
   onSubmit();
   const response = await request(url, init);
+  if (kind === 'image') onStatus({phase:'headers', text:'已收到响应头', httpStatus:response.status});
   if (!response.ok) {
     await response.body?.cancel();
     throw kind === 'image' ? imageHttpError(response.status) : Error(`生成服务返回 HTTP ${response.status}`);
   }
-  if (kind === 'image') return imageResponse(response, signal, request);
+  if (kind === 'image') return imageResponse(response, provider, {signal, request, pollDelayMs, onStatus});
   if (kind !== 'audio' && !(response.headers.get('content-type') || '').includes('json')) {
     const data = await mediaBytes(response, '生成结果');
     const mimeType = response.headers.get('content-type') || (kind === 'image' ? 'image/png' : 'video/mp4');
