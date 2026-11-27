@@ -160,6 +160,39 @@ function imageEditForm(reference, fields) {
   return form;
 }
 
+function imageHttpError(status) {
+  const hint = ({
+    400: '请核对生图模型 ID、尺寸和质量，或把质量恢复为模型默认。',
+    401: '请在模型配置中检查 API Key。', 403: '请核对该账户的生图权限。',
+    404: '请核对 API 基础地址和生成接口路径。',
+    429: '请查看账户额度或稍后重试。'
+  })[status] || '请查看服务商记录后决定是否重试。';
+  return Error(`生成服务返回 HTTP ${status}。${hint}`);
+}
+
+async function imageResponse(response, signal, request) {
+  const type = (response.headers.get('content-type') || '').toLowerCase();
+  if (type.includes('text/html')) {
+    await response.body?.cancel();
+    throw Error('接口返回了网页，没有返回图片。请核对 Base URL 是否需要 /v1，以及生成接口路径。');
+  }
+  const raw = await readLimited(response, type.includes('image/') ? MAX_OUTPUT : 96 * 1024 * 1024, '图像响应');
+  if (!raw.length) throw Error('生成结果为空，未取得文件');
+  if (detectImage(raw)) return normalizeImage({data:raw.toString('base64')});
+  const prefix = raw.subarray(0, 256).toString().trimStart();
+  if (prefix.startsWith('<')) throw Error('接口返回了网页，没有返回图片。请核对 Base URL 和生成接口路径。');
+  if (!type.includes('json') && !prefix.startsWith('{')) throw Error('接口没有返回 PNG、JPEG 或 WebP 图片，请检查生成接口的输出格式。');
+  let payload;
+  try { payload = JSON.parse(raw.toString()); }
+  catch { throw Error('图像接口返回了无效 JSON，请检查网关的响应格式。'); }
+  if (payload?.error) throw Error('服务在响应中报告生成失败。请核对模型权限与所选参数。');
+  if (payload?.choices && !payload.data) throw Error('接口返回了对话响应，请选择图像生成模型和对应的生成接口。');
+  const outputs = responseAssets(payload, 'image');
+  if (!outputs.length) throw Error('响应中没有图像文件。请确认服务支持图像接口并返回图片地址或 base64。');
+  const images = (await materializeAssets(outputs, signal, request)).map(normalizeImage);
+  return { ...images[0], assets: images };
+}
+
 async function generateAsset(provider, input, { signal, request = fetch, pollDelayMs = 2000, onStatus = () => {}, onSubmit = () => {}, onVideoId = () => {} } = {}) {
   if (!input || !['image', 'video', 'audio'].includes(input.kind)) throw Error('不支持的生成类型');
   const kind = input.kind;
@@ -209,19 +242,23 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   signal?.throwIfAborted();
   onSubmit();
   const response = await request(url, init);
-  if (!response.ok) throw Error(`生成服务返回 HTTP ${response.status}`);
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw kind === 'image' ? imageHttpError(response.status) : Error(`生成服务返回 HTTP ${response.status}`);
+  }
+  if (kind === 'image') return imageResponse(response, signal, request);
   if (kind !== 'audio' && !(response.headers.get('content-type') || '').includes('json')) {
     const data = await mediaBytes(response, '生成结果');
     const mimeType = response.headers.get('content-type') || (kind === 'image' ? 'image/png' : 'video/mp4');
     const asset = { data: data.toString('base64'), mimeType, filename: 'xiaoxiao-video.mp4' };
-    return kind === 'image' ? normalizeImage(asset) : asset;
+    return asset;
   }
   if (kind === 'audio' && !(response.headers.get('content-type') || '').includes('json')) {
     const data = await mediaBytes(response, '语音结果');
     const mimeType = body.response_format === 'mp3' ? 'audio/mpeg' : `audio/${body.response_format}`;
     return { data: data.toString('base64'), mimeType, filename: `xiaoxiao-audio.${body.response_format}` };
   }
-  const payload = await jsonResponse(response, kind === 'image' ? 96 * 1024 * 1024 : MAX_JSON);
+  const payload = await jsonResponse(response);
   const ids = kind === 'video' ? [payload?.id, payload?.task_id, payload?.data?.id] : [];
   const videoId = ids.find(id => (typeof id === 'string' || Number.isSafeInteger(id))
     && /^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,255}$/.test(String(id)));
@@ -230,10 +267,6 @@ async function generateAsset(provider, input, { signal, request = fetch, pollDel
   const outputs = responseAssets(payload, kind);
   if (kind === 'video' && outputs.some(asset => asset.url)) onStatus({ phase: 'download', text: '正在下载生成的视频…' });
   const assets = await materializeAssets(outputs, signal, request);
-  if (kind === 'image' && assets.length) {
-    const images = assets.map(normalizeImage);
-    return { ...images[0], assets: images };
-  }
   if (assets.length) return { ...assets[0], assets };
   if (videoId === undefined) {
     if (ids.some(id => id != null && id !== '')) throw Error('远程视频任务号无效');

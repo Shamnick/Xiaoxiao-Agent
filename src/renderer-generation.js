@@ -320,7 +320,9 @@ function fillGenerationModels(rows) {
   for (const kind of Object.keys(generationTabs)) {
     const select = $(`generation${generationCapitalized(kind)}Model`);
     const draftModel = creationDrafts.get(activeThreads[kind])?.fields?.[select.id];
-    const preferred = select.value || draftModel || current?.providerId || $('modelSelect').value;
+    const pinned = rows.find(row => row.id === localStorage.getItem('xiaoxiao-studio-model-' + kind));
+    const imageChoice = kind === 'image' && rows.find(row => /gpt-image|dall-e|seedream|imagen|flux/i.test(row.model));
+    const preferred = select.value || draftModel || pinned?.id || imageChoice?.id || current?.providerId || $('modelSelect').value;
     select.replaceChildren(...rows.map(row => new Option(`${row.name} · ${row.model}`, row.id)));
     if (isLocalVoice(kind,localVoiceId)) select.append(new Option('Mac 系统语音 · 本机',localVoiceId));
     if (!select.options.length) select.append(new Option('还没有模型配置', ''));
@@ -337,7 +339,7 @@ function renderGenerationResult() {
   const follow = !same || output.scrollHeight - output.clientHeight - output.scrollTop < 90;
   output.dataset.thread = activeThread();
   $('generationStageTitle').textContent = turns[0]?.prompt || { image: '图像工作室', video: '视频工作室', audio: '语音工作室' }[generationKind];
-  $('generationStageMeta').textContent = latest ? formatGenerationDate(latest.createdAt) : '';
+  $('generationStageMeta').textContent = latest ? [generationLabels[generationKind], latest.modelLabel, formatGenerationDate(latest.createdAt)].filter(Boolean).join(' · ') : '';
   $('generationDuplicate').hidden = !latest;
   $('generationDuplicate').disabled = !latest;
   $('saveGeneration').hidden = !completed;
@@ -407,6 +409,21 @@ function renderGenerationResult() {
       previewObserver.observe(preview);
       preview.dataset.id = item.id;
       buttons.append(messageButton('download', '导出这轮作品', () => exportCreation(item)));
+    } else if (item.kind === 'image' && item.state === 'failed') {
+      const heading = document.createElement('strong');
+      heading.textContent = '本轮未取得图片';
+      const detail = document.createElement('p');
+      detail.textContent = item.status || '请核对生图模型与接口。';
+      const repair = document.createElement('button');
+      repair.type = 'button';
+      repair.textContent = '调整模型与参数';
+      repair.onclick = () => {
+        editCreation(item);
+        if (!$('creationInspector').checkVisibility()) $('openCreationSettings').click();
+        $('generationImageModel').focus();
+      };
+      preview.classList.add('image-issue');
+      preview.append(heading, detail, repair);
     } else {
       preview.textContent = item.status || (item.state === 'running' ? '正在生成…' : '等待生成…');
     }
@@ -653,7 +670,8 @@ $('generateSpeechExcerpt').onclick = () => {
 
 async function refreshGenerationModels() {
   try {
-    fillGenerationModels(await api.providers.list());
+    providers = await api.providers.list();
+    fillGenerationModels(providers);
     updateGenerationComposer();
     if (!generationModelId()) $('generationStatus').textContent = '请先在设置中添加模型配置。';
   } catch (error) {
@@ -796,7 +814,7 @@ $('openGenerationStudio').onclick = () => {
   void refreshGenerationModels();
   generationPromptElement().focus();
 };
-$('manageGenerationModels').onclick = () => { setTab('provider'); void openSettings(); };
+$('manageGenerationModels').onclick = () => { setTab('provider'); void openSettings(generationModelId()); };
 $('settingsDialog').addEventListener('close', () => {
   if (!$('generationStudio').hidden) void refreshGenerationModels();
 });
@@ -919,7 +937,7 @@ function enqueueCreation(prompt, fields, parentId, excerptLabel, reference, prio
     input.destination = destination;
   }
   const item = { id: crypto.randomUUID(), threadId: activeThread(), parentId, kind: input.kind,
-    prompt: input.prompt, fields, route: mediaRoute(input.kind, fields, reference), ...(reference && {reference, destination}), ...(excerptLabel && {excerptLabel}), ...(input.kind === 'video' && { tracksSubmission: true }), state: 'queued',
+    modelLabel: providers.find(p => p.id === input.providerId)?.model, prompt: input.prompt, fields, route: mediaRoute(input.kind, fields, reference), ...(reference && {reference, destination}), ...(excerptLabel && {excerptLabel}), ...(input.kind === 'video' && { tracksSubmission: true }), state: 'queued',
     createdAt: Math.max(Date.now(), (generationHistory[0]?.createdAt || 0) + 1) };
   generationHistory.unshift(item);
   const recorded = archiveOperation('readwrite', records => records.put({ ...item, state: 'queued' }))
@@ -1005,7 +1023,7 @@ async function finishCreation(item, state, status, result) {
   }
   Object.assign(item, completed);
   if (activeThread() === creationThread(item)) {
-    $('generationStatus').textContent = item.status;
+    $('generationStatus').textContent = item.kind === 'image' && state === 'failed' ? '' : item.status;
     renderGenerationResult();
   }
 }
@@ -1096,6 +1114,7 @@ document.addEventListener('input', event => {
     updateDraftEntry();
     updateGenerationComposer();
   } else if ($('creationInspector').contains(event.target)) {
+    if (event.target.id === 'generationImageModel' && event.target.value) localStorage.setItem('xiaoxiao-studio-model-image', event.target.value);
     saveCreationDraft();
     updateGenerationComposer();
   }

@@ -132,3 +132,20 @@ test('an HTTP 200 error document cannot be delivered as an image', async () => {
   await assert.rejects(generateAsset(provider,input,{request:async () => new Response('<html>Error</html>')}), /没有返回.*图片/);
   await assert.rejects(generateAsset(provider,input,{request:async () => Response.json({data:[{b64_json:'ZXJyb3I='}]})}), /没有返回.*图片/);
 });
+
+test('gateways returning image JSON as text, HTML, or a chat envelope are distinguished', async () => {
+  const image = { kind: 'image', prompt: '牛' };
+  const result = await generateAsset(provider, image, {
+    request: async () => new Response(JSON.stringify({ data: [{ b64_json: png }] }))
+  });
+  assert.equal(result.data, png);
+  for (const [response, error] of [
+    [new Response('<html>portal</html>', {headers:{'content-type':'text/html'}}), /网页.*Base URL/],
+    [Response.json({choices:[{message:{content:'hello'}}]}), /对话响应/],
+    [Response.json({error:{message:'sensitive response'}}, {status:400}), /HTTP 400.*模型 ID/]
+  ]) {
+    let attempts = 0;
+    await assert.rejects(generateAsset(provider, image, {request:async () => { attempts++; return response; }}), error);
+    assert.equal(attempts, 1);
+  }
+});

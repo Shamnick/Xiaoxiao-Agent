@@ -97,6 +97,11 @@ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:pa
    await page.locator('#providerForm [name=name]').fill('本地测试');
    await page.locator('#providerForm [name=model]').fill('fixture-model');
    await page.locator('#providerForm [name=baseUrl]').fill('http://127.0.0.1:'+server.address().port+'/v1');
+   await page.locator('#providerForm [name=model]').fill('');
+   await page.locator('#fetchModels').click();
+   await page.waitForFunction(() => document.querySelectorAll('#availableModels option').length === 2);
+   assert.deepEqual(await page.evaluate(() => nova.providers.list()), []);
+   await page.locator('#providerForm [name=model]').fill('fixture-model');
    await page.locator('#providerSubmit').click();
    await page.locator('#providerList button').filter({hasText:'本地测试'}).waitFor();
    const providerId=await page.locator('#modelSelect').inputValue();

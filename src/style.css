@@ -984,3 +984,25 @@ body:has(#generationStudio:not([hidden])) > :is(.main, #sidebar, #toggleSidebar)
 .generation-empty.has-reference { max-width: 100%; }
 .generation-empty.has-reference img { max-height: min(30vh, 320px); max-width: 100%; object-fit: contain; border-radius: 8px; }
 .generation-empty.has-reference strong { font-size: 15px; overflow-wrap: anywhere; }
+
+/* Keep image revisions aligned as a work log, with recovery next to the failed output. */
+#generationStudio:has(#generationTabImage[aria-selected=true]) .creation-turn {
+  width: 100%; max-width: 840px; padding: 15px 0; border-bottom: 1px solid var(--line);
+}
+#generationStudio:has(#generationTabImage[aria-selected=true]) .creation-turn + .creation-turn { margin-top: 0; }
+#generationStudio:has(#generationTabImage[aria-selected=true]) .creation-question {
+  margin: 0 0 10px; padding: 0; border: 0; background: none; font-weight: 600; max-width: 100%;
+}
+.image-issue { display: grid; justify-items: start; gap: 6px; padding: 12px 14px; border-inline-start: 3px solid var(--accent); background: var(--subtle); border-radius: 4px 9px 9px 4px; }
+.image-issue strong { color: var(--text); font-size: 13px; }
+.image-issue p { margin: 0; line-height: 1.6; }
+.image-issue button, .image-model-field button { font-size: 12px; min-height: 30px; color: var(--accent); }
+.image-model-field { display: grid; min-width: 0; gap: 6px; }
+.image-model-field button { justify-self: start; }
+#generationPanelImage details[open] label { display: grid; gap: 5px; margin-block-start: 12px; }
+#imageModelDialog { width: min(440px, calc(100vw - 40px)); max-height: calc(100vh - 48px); overflow: auto; }
+#imageModelDialog h2 { margin: 0 0 15px; font-size: 19px; }
+#imageModelDialog label { display: grid; gap: 5px; margin-top: 10px; font-size: 13px; }
+#imageCatalogNote { color: var(--muted); font-size: 12px; }
+#imageCatalogList { width: 100%; height: auto; min-height: 132px; }
+#imageCatalogList option { padding: 4px 7px; }

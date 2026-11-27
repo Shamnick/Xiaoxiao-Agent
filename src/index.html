@@ -600,7 +600,7 @@
                 </label>
                 <label>模型 ID<input name="model" list="availableModels" placeholder="填写服务商提供的 ID" required><datalist id="availableModels"></datalist></label>
               </div>
-              <label>Base URL<input name="baseUrl" placeholder="留空使用服务默认地址" type="url"></label>
+              <label>Base URL<input name="baseUrl" placeholder="API 基础地址，例如 https://服务域名/v1" type="url"></label>
               <label>API Key<input name="apiKey" type="password" autocomplete="new-password" placeholder="留空保留已保存的 Key" aria-describedby="keyStatus"></label>
               <div class="checkbox-row">
                 <label><input name="stream" type="checkbox" checked> 启用流式输出</label>
@@ -609,7 +609,7 @@
               <p id="keyStatus" class="muted"></p>
               <div class="provider-tools">
                 <button id="fetchModels" type="button" class="quiet">获取模型列表</button>
-                <button id="testProvider" type="button" class="quiet">测试连接</button>
+                <button id="testProvider" type="button" class="quiet">测试文本对话</button>
                 <button id="deleteProvider" type="button" class="quiet danger">删除配置</button>
               </div>
             </fieldset>
@@ -736,15 +736,16 @@
             <p id="generationEvidence" class="generation-evidence" role="status"></p>
             <section id="generationPanelImage" class="generation-panel" role="tabpanel" aria-labelledby="generationTabImage">
               <div class="generation-fields">
-                <label class="generation-span">模型<select id="generationImageModel"></select></label>
+                <div class="generation-span image-model-field"><label for="generationImageModel">生图模型</label><select id="generationImageModel"></select><button type="button" id="chooseImageModel" class="quiet">从服务商目录选择…</button></div>
                 <label>尺寸<select id="generationImageSize"><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option><option>1792x1024</option></select></label>
                 <label>质量<select id="generationImageQuality"><option value="">模型默认</option><option value="standard">标准</option><option value="hd">高清</option></select></label>
                 <label>输出数量<select id="generationImageCount"><option value="1">1 张</option><option value="2">2 张</option><option value="4">4 张</option></select></label>
                 <label>风格<select id="generationImageStyle"><option value="">模型默认</option><option value="natural">自然</option><option value="vivid">鲜明</option><option value="cinematic">电影感</option><option value="illustration">插画</option></select></label>
+                <label class="generation-span">排除内容<textarea id="generationImageNegative" rows="2" maxlength="2000" placeholder="可选，例如：模糊、文字、水印…"></textarea></label>
+                <details class="generation-advanced generation-span"><summary>接口与高级参数</summary>
                 <label class="generation-span generation-muted-field">生成接口<input id="generationImageEndpoint" value="/images/generations" spellcheck="false"></label>
                 <label class="generation-span generation-muted-field" id="generationEditRoute" hidden>编辑接口<input id="generationImageEditEndpoint" value="/images/edits" spellcheck="false"></label>
-                <label class="generation-span">排除内容<textarea id="generationImageNegative" rows="2" maxlength="2000" placeholder="可选，例如：模糊、文字、水印…"></textarea></label>
-                <details class="generation-advanced generation-span"><summary>高级请求参数</summary><textarea id="generationImageOptions" aria-label="高级 JSON 参数" rows="4" spellcheck="false" placeholder='{"seed":42}'></textarea></details>
+                <label>附加请求参数（JSON）<textarea id="generationImageOptions" aria-label="高级 JSON 参数" rows="4" spellcheck="false" placeholder='{"seed":42}'></textarea></label></details>
               </div>
             </section>
             <section id="generationPanelVideo" class="generation-panel" role="tabpanel" aria-labelledby="generationTabVideo" hidden>
@@ -777,6 +778,14 @@
       </section>
     </div>
   </main>
+  <dialog id="imageModelDialog" aria-labelledby="imageModelHeading">
+    <h2 id="imageModelHeading">选择生图模型</h2>
+    <label>服务连接<select id="imageCatalogConnection"></select></label>
+    <label>模型 ID<input id="imageCatalogQuery" maxlength="200" placeholder="搜索目录或填写模型 ID" autocomplete="off"></label>
+    <p id="imageCatalogNote" role="status"></p>
+    <select id="imageCatalogList" size="7" aria-label="服务商模型目录"></select>
+    <div class="dialog-actions"><button id="imageCatalogClose" type="button">取消</button><button class="primary" id="imageCatalogUse" type="button" disabled>用于生图</button></div>
+  </dialog>
   <dialog id="proofStudio" aria-labelledby="proofHeading">
     <header class="proof-bar">
       <div><h2 id="proofHeading">局部改稿</h2><p id="proofVersion">读取作品中…</p></div>
@@ -877,6 +886,7 @@
   <script src="renderer.js"></script>
   <script src="renderer-media.js"></script>
   <script src="renderer-generation.js"></script>
+  <script src="renderer-image-catalog.js"></script>
   <script src="renderer-gallery.js"></script>
   <script src="renderer-schedules.js"></script>
   <script src="renderer-proof-poster.js"></script>

@@ -67,6 +67,9 @@ async function run() {
   const imagePrompts = [], videoPrompts = [], audioPrompts = [];
   const server = createServer(async (req, res) => {
     requests.push(`${req.method} ${req.url}`);
+    if (req.url === '/v1/models') {
+      return res.writeHead(200, {'content-type':'application/json'}).end(JSON.stringify({data:[{id:'fixture-chat'},{id:'gpt-image-fixture'}]}));
+    }
     if (req.url === '/v1/images/edits' && req.method === 'POST') {
       const form = await new Response(req, {headers: req.headers}).formData();
       const image = form.get('image');
@@ -160,6 +163,16 @@ async function run() {
     }
 
     await page.locator('#generationEvidence').filter({hasText:'未验证'}).waitFor();
+    const chatModel = await page.locator('#modelSelect').inputValue();
+    await page.locator('#chooseImageModel').click();
+    await page.locator('#imageCatalogList option').first().waitFor({state:'attached'});
+    assert.equal(await page.locator('#imageCatalogList option').first().textContent(), 'gpt-image-fixture');
+    await page.locator('#imageCatalogList').selectOption('gpt-image-fixture');
+    await page.locator('#imageCatalogUse').click();
+    await page.locator('#imageModelDialog').waitFor({state:'hidden'});
+    assert.match(await page.locator('#generationImageModel option:checked').textContent(), /gpt-image-fixture/);
+    assert.equal(await page.locator('#modelSelect').inputValue(), chatModel);
+    await page.locator('#generationImageModel').selectOption('fixture-vision');
     await page.locator('#generationPreset').click();
     await page.locator('#generationPresetMenu:popover-open').waitFor();
     assert.equal(await page.locator('#generationPresetMenu button').count(), 4);
@@ -334,6 +347,11 @@ async function run() {
     await imageField.fill('模拟失败');
     await page.locator('#runGeneration').click();
     await page.locator('.creation-turn[data-state=failed]').waitFor();
+    await page.locator('.image-issue').getByRole('button', {name:'调整模型与参数'}).click();
+    assert.equal(await imageField.inputValue(), '模拟失败');
+    assert.equal(imagePrompts.filter(p => p === '模拟失败').length, 1);
+    if (qa) await page.screenshot({path:path.join(qa,'image-recovery.png'),scale:'css'});
+    await page.locator('#cancelCreationEdit').click();
     await page.getByRole('button', {name:'重新生成这一轮'}).click();
     await page.locator('.creation-turn').nth(1).locator('img').first().waitFor();
     assert.equal(imagePrompts.at(-1), '模拟失败');

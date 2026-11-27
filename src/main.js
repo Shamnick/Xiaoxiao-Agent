@@ -152,9 +152,23 @@ handle('providers:rememberModel', (_, { connectionId, model }) => {
   store.write('providers', rows);
   return choice.id;
 });
-handle('providers:models',(_,id)=>models(provider(id),AbortSignal.timeout(15000)));
-handle('providers:test',async(_,id)=>{
-  const p=provider(id);
+// Unsaved form checks may reuse a stored credential only at its exact saved destination.
+function providerForCheck(input, listing) {
+  if (typeof input === 'string') return provider(input);
+  const draft = config({ ...input, name: input.name || '连接', model: listing ? 'catalog' : input.model });
+  const key = String(input.apiKey || '').trim();
+  if (key.length > 4096 || /[\r\n]/.test(key)) throw Error('API Key 格式错误');
+  if (key) return { ...draft, key };
+  const old = store.read('providers', []).find(row => row.id === input.id);
+  if (!input.clearKey && old?.apiKey) {
+    if (old.kind !== draft.kind || old.baseUrl !== draft.baseUrl) throw Error('地址或协议已变更，请重新填写 API Key 后检查');
+    draft.key = provider(old.id).key;
+  }
+  return draft;
+}
+handle('providers:models', (_, input) => models(providerForCheck(input, true), AbortSignal.timeout(15000)));
+handle('providers:test', async (_, input) => {
+  const p = providerForCheck(input, false);
   return runAgent(p,[{role:'user',content:'Reply with OK.'}],{signal:AbortSignal.timeout(30000),maxSteps:1});
 });
 handle('media:analyze', async (sender, input) => {
